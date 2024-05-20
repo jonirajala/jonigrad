@@ -16,8 +16,8 @@ g = np.random.default_rng()  # create a random generator
 def load_data():
     (train_X, train_y), (test_X, test_y) = mnist.load_data()
     WIDTH, HEIGHT = train_X.shape[1], train_X.shape[2]
-    train_X = train_X.reshape(-1, HEIGHT, WIDTH, 1).astype(np.float32) / 255.0
-    test_X = test_X.reshape(-1, HEIGHT, WIDTH, 1).astype(np.float32) / 255.0
+    train_X = train_X.reshape(-1, 1,  HEIGHT, WIDTH).astype(np.float32) / 255.0
+    test_X = test_X.reshape(-1, 1, HEIGHT, WIDTH).astype(np.float32) / 255.0
 
     return train_X, train_y, test_X, test_y
 

@@ -99,13 +99,13 @@ class TestReLULayer(unittest.TestCase):
 
 class TestConvLayer(unittest.TestCase):
     def setUp(self):
-        self.batch_size = 2
-        self.n_channels = 3
-        self.out_channels = 4
+        self.batch_size = 4
+        self.n_channels = 2
+        self.out_channels = 2
         self.kernel_size = 3
         self.stride = 1
-        self.padding = 0
-        self.input_size = 5
+        self.padding = 1
+        self.input_size = 4
 
         # Initialize custom conv layer
         self.custom_conv = Conv(self.n_channels, self.out_channels, self.kernel_size, self.stride, self.padding)
@@ -117,15 +117,16 @@ class TestConvLayer(unittest.TestCase):
         self.torch_conv.weight.data = torch.from_numpy(self.custom_conv._params["F"].data).float()
 
         # Create random input
-        self.x = np.random.randn(self.batch_size, self.input_size, self.input_size, self.n_channels).astype(np.float32)
-        self.x_torch = torch.from_numpy(self.x).permute(0, 3, 1, 2).float()  # Change to (N, C, H, W)
-        self.x_torch.requires_grad_(True)  # Ensure that x_torch requires gradients
+        self.x = np.random.randn(self.batch_size, self.n_channels, self.input_size, self.input_size).astype(np.float32)
+        self.x_torch = torch.from_numpy(self.x).float()
+        self.x_torch.requires_grad_(True)
+
 
     def test_forward_pass(self):
         # Forward pass through both layers
-        print(self.x.shape, self.x_torch.shape)
+
         custom_output = self.custom_conv(self.x)
-        torch_output = self.torch_conv(self.x_torch).detach().numpy().transpose(0, 2, 3, 1)  # Change to (N, H, W, C)
+        torch_output = self.torch_conv(self.x_torch).detach().numpy()  # Change to (N, H, W, C)
 
         # Check if outputs are the same
         print(custom_output.shape, torch_output.shape)
@@ -138,7 +139,7 @@ class TestConvLayer(unittest.TestCase):
 
         # Create random gradient for backward pass
         grad_output = np.random.randn(*custom_output.shape).astype(np.float32)
-        grad_output_torch = torch.from_numpy(grad_output).permute(0, 3, 1, 2).float()  # Change to (N, C, H, W)
+        grad_output_torch = torch.from_numpy(grad_output).float()  # Change to (N, C, H, W)
 
         # Backward pass through custom layer
         self.custom_conv.zero_grad()
@@ -147,10 +148,10 @@ class TestConvLayer(unittest.TestCase):
         # Backward pass through PyTorch layer
         self.torch_conv.zero_grad()
         torch_output.backward(grad_output_torch)
-        torch_grad_input = self.x_torch.grad.numpy().transpose(0, 2, 3, 1)  # Change to (N, H, W, C)
+        torch_grad_input = self.x_torch.grad.numpy()  # Change to (N, H, W, C)
 
         # Check if gradients are the same
-        self.assertTrue(np.allclose(self.custom_conv.dL_dW, self.torch_conv.weight.grad.numpy(), atol=1e-6), "Weight gradients do not match!")
+        self.assertTrue(np.allclose(self.custom_conv._params["F"].grad, self.torch_conv.weight.grad.numpy(), atol=1e-6), "Weight gradients do not match!")
         self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6), "Backward pass gradients do not match!")
 
 class TestCrossEntropyLoss(unittest.TestCase):

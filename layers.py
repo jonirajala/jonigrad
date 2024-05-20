@@ -128,60 +128,59 @@ class Conv(Module):
     def __call__(self, x):
         self.x = x.astype(np.float32)
 
-        N, H_in, W_in, C_in = x.shape
+        N, C_in, H_in, W_in = x.shape
         H_out = int((H_in - self.kernel_size + 2 * self.padding) / self.stride + 1)
         W_out = int((W_in - self.kernel_size + 2 * self.padding) / self.stride + 1)
 
         if self.padding != 0:
-            x = np.pad(x, pad_width=((0, 0), (self.padding, self.padding), (self.padding, self.padding), (0, 0)), mode='constant', constant_values=0)
+            x = np.pad(x, pad_width=((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)), mode='constant', constant_values=0)
 
         # Im2col operation
         cols = np.lib.stride_tricks.as_strided(
-            x, 
-            shape=(N, H_out, W_out, self.kernel_size, self.kernel_size, C_in),
-            strides=(x.strides[0], x.strides[1] * self.stride, x.strides[2] * self.stride, x.strides[1], x.strides[2], x.strides[3]),
+            x,
+            shape=(N, C_in, self.kernel_size, self.kernel_size, H_out, W_out),
+            strides=(x.strides[0], x.strides[1], x.strides[2], x.strides[3], x.strides[2] * self.stride, x.strides[3] * self.stride),
             writeable=False
-        ).reshape(N * H_out * W_out, -1)
+        ).transpose(0, 4, 5, 1, 2, 3).reshape(N * H_out * W_out, -1)
 
         F_col = self._params["F"].data.reshape(self.out_channels, -1)
 
-        out = np.dot(cols, F_col.T).reshape(N, H_out, W_out, self.out_channels)
+        out = np.dot(cols, F_col.T).reshape(N, H_out, W_out, self.out_channels).transpose(0, 3, 1, 2)
         self.out_shape = out.shape
 
         return out
 
     def backward(self, dL_dy):
-        N, H_in, W_in, C_in = self.x.shape
-        H_out, W_out = self.out_shape[1], self.out_shape[2]
+        N, C_in, H_in, W_in = self.x.shape
+        H_out, W_out = self.out_shape[2], self.out_shape[3]
 
         if self.padding != 0:
-            self.x = np.pad(self.x, pad_width=((0, 0), (self.padding, self.padding), (self.padding, self.padding), (0, 0)), mode='constant', constant_values=0)
+            self.x = np.pad(self.x, pad_width=((0, 0), (0, 0), (self.padding, self.padding), (self.padding, self.padding)), mode='constant', constant_values=0)
 
         dL_dx = np.zeros_like(self.x, dtype=np.float32)
-        self.dL_dW = np.zeros_like(self._params["F"].data)
 
         cols = np.lib.stride_tricks.as_strided(
-            self.x, 
-            shape=(N, H_out, W_out, self.kernel_size, self.kernel_size, C_in),
-            strides=(self.x.strides[0], self.x.strides[1] * self.stride, self.x.strides[2] * self.stride, self.x.strides[1], self.x.strides[2], self.x.strides[3]),
+            self.x,
+            shape=(N, C_in, self.kernel_size, self.kernel_size, H_out, W_out),
+            strides=(self.x.strides[0], self.x.strides[1], self.x.strides[2], self.x.strides[3], self.x.strides[2] * self.stride, self.x.strides[3] * self.stride),
             writeable=False
-        ).reshape(N * H_out * W_out, -1)
+        ).transpose(0, 4, 5, 1, 2, 3).reshape(N * H_out * W_out, -1)
 
-        dL_dy_reshaped = dL_dy.transpose(0, 3, 1, 2).reshape(-1, self.out_channels)
+        dL_dy_reshaped = dL_dy.transpose(0, 2, 3, 1).reshape(-1, self.out_channels)
 
         # Gradient with respect to weights
-        self.dL_dW = np.dot(dL_dy_reshaped.T, cols).reshape(self._params["F"].data.shape)
+        self._params["F"].grad = np.dot(dL_dy_reshaped.T, cols).reshape(self._params["F"].data.shape)
 
         # Gradient with respect to input
         F_reshaped = self._params["F"].data.reshape(self.out_channels, -1)
-        dL_dcol = np.dot(dL_dy_reshaped, F_reshaped).reshape(N, H_out, W_out, self.kernel_size, self.kernel_size, C_in)
+        dL_dcol = np.dot(dL_dy_reshaped, F_reshaped).reshape(N, H_out, W_out, C_in, self.kernel_size, self.kernel_size).transpose(0, 3, 4, 5, 1, 2)
 
         for i in range(H_out):
             for j in range(W_out):
-                dL_dx[:, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size, :] += dL_dcol[:, i, j, :, :, :]
+                dL_dx[:, :, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size] += dL_dcol[:, :, :, :, i, j]
 
         if self.padding != 0:
-            dL_dx = dL_dx[:, self.padding:-self.padding, self.padding:-self.padding, :]
+            dL_dx = dL_dx[:, :, self.padding:-self.padding, self.padding:-self.padding]
 
         return dL_dx
 
