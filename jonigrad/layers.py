@@ -246,3 +246,127 @@ class ReLU(Module):
         dL_dx = dL_dy * (self.x > 0).astype(float)
         self.dL_dx = dL_dx
         return self.dL_dx
+
+class LRNorm(Module):
+    def __init__(self, size, alpha=1e-4, beta=0.75, k=2.0):
+        super().__init__()
+        self.size = size
+        self.alpha = alpha
+        self.beta = beta
+        self.k = k
+        
+    def __call__(self, x):
+        self.x = x
+        self.norm = np.zeros_like(x)
+        N, C, H, W = x.shape
+        for i in range(C):
+            start = max(0, i - self.size // 2)
+            end = min(C, i + self.size // 2 + 1)
+            self.norm[:, i, :, :] = np.sum(x[:, start:end, :, :] ** 2, axis=1)
+        self.norm = (self.k + (self.alpha / self.size) * self.norm) ** self.beta
+        return x / self.norm
+    
+    # def backward(self, dL_dy):
+    #     N, C, H, W = self.x.shape
+    #     dx = np.zeros_like(self.x)
+        
+    #     squared = np.power(self.x, 2)
+    #     pad = (self.size // 2, )
+    #     squared_padded = np.pad(squared, ((0, 0), (pad[0], pad[0]), (0, 0), (0, 0)), mode='constant', constant_values=0)
+    #     norm_padded = np.pad(self.norm, ((0, 0), (pad[0], pad[0]), (0, 0), (0, 0)), mode='constant', constant_values=0)
+
+    #     for i in range(C):
+    #         for j in range(max(0, i - self.size // 2), min(C, i + self.size // 2 + 1)):
+    #             if j != i:
+    #                 dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+    #                                    self.x[:, i, :, :] * self.x[:, j, :, :] *
+    #                                    dL_dy[:, j, :, :] / np.power(norm_padded[:, j + pad[0], :, :], self.beta + 1))
+    #             else:
+    #                 dx[:, i, :, :] += dL_dy[:, i, :, :] / self.norm[:, i, :, :]
+    #                 dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+    #                                    self.x[:, i, :, :] * self.x[:, i, :, :] *
+    #                                    dL_dy[:, i, :, :] / np.power(self.norm[:, i, :, :], self.beta + 1))
+    #     return dx
+    def backward(self, dL_dy):
+        N, C, H, W = self.x.shape
+        dx = np.zeros_like(self.x)
+        
+        for i in range(C):
+            start = max(0, i - self.size // 2)
+            end = min(C, i + self.size // 2 + 1)
+            for j in range(start, end):
+                if j != i:
+                    dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+                                       self.x[:, i, :, :] * self.x[:, j, :, :] *
+                                       dL_dy[:, j, :, :] / np.power(self.norm[:, j, :, :], self.beta + 1))
+                else:
+                    dx[:, i, :, :] += dL_dy[:, i, :, :] / self.norm[:, i, :, :]
+                    dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+                                       self.x[:, i, :, :] * self.x[:, i, :, :] *
+                                       dL_dy[:, i, :, :] / np.power(self.norm[:, i, :, :], self.beta + 1))
+        return dx
+    # N, C, H, W = self.x.shape
+    # dx = np.zeros_like(self.x)
+    
+    # for i in range(C):
+    #     start = max(0, i - self.size // 2)
+    #     end = min(C, i + self.size // 2 + 1)
+        
+    #     for j in range(start, end):
+    #         if j != i:
+    #             dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+    #                                self.x[:, j, :, :] *
+    #                                dL_dy[:, j, :, :] / (self.norm[:, j, :, :] ** (self.beta + 1)))
+    #         else:
+    #             dx[:, i, :, :] += dL_dy[:, i, :, :] / self.norm[:, i, :, :]
+    #             dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
+    #                                self.x[:, i, :, :] *
+    #                                dL_dy[:, i, :, :] / (self.norm[:, i, :, :] ** (self.beta + 1)))
+    # return dx
+
+
+class MaxPool(Module):
+    def __init__(self, kernel_size, stride, padding):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+
+    def __call__(self, x):
+        self.x = x
+        N, C, H, W = x.shape
+        out_H = (H - self.kernel_size) // self.stride + 1
+        out_W = (W - self.kernel_size) // self.stride + 1
+
+
+        out = np.zeros((N, C, out_H, out_W))
+        print(out.shape)
+        for n in range(N):
+            for k in range(C):
+                for i in range(out_H):
+                    for j in range(out_W):
+                        window = x[n, k, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size]
+                        max = np.amax(window)
+                        out[n, k, i, j] = max
+      
+        return out
+        
+    def backward(self, dL_dy):
+        N, C, H, W = self.x.shape
+        dX = np.zeros_like(self.x)
+
+        out_H = (H - self.kernel_size) // self.stride + 1
+        out_W = (W - self.kernel_size) // self.stride + 1
+
+        for n in range(N):
+            for k in range(C):
+                for i in range(out_H):
+                    for j in range(out_W):
+                        window = self.x[n, k, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size]
+                        max_val = np.max(window)
+                        for m in range(self.kernel_size):
+                            for l in range(self.kernel_size):
+                                if window[m, l] == max_val:
+                                    dX[n, k, i*self.stride+m, j*self.stride+l] += dL_dy[n, k, i, j]
+        
+        return dX

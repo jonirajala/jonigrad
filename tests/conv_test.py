@@ -3,7 +3,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from layers import Linear, ReLU, CrossEntropyLoss, Conv
+from jonigrad.layers import Linear, ReLU, CrossEntropyLoss, Conv
 
 BATCH_SIZE = 32
 ITERS = 100
