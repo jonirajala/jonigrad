@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 import torch.nn as nn
-from layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss
+from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss
 
 
 class TestLinearLayer(unittest.TestCase):

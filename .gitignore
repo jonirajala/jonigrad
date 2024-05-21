@@ -1,0 +1,5 @@
+/venv
+/MNIST
+__pycache__/
+*.pyc
+jonigrad.egg-info/

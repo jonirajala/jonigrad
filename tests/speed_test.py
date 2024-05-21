@@ -7,7 +7,7 @@ from keras.datasets import mnist
 import time
 import matplotlib.pyplot as plt
 
-from layers import Linear, ReLU, CrossEntropyLoss, Conv
+from jonigrad.layers import Linear, ReLU, CrossEntropyLoss, Conv
 
 BATCH_SIZE = 32
 ITERS = 100
@@ -81,7 +81,6 @@ def torch_conv_test(Xb, Yb):
 
     return end_time - start_time
 
-
 def custom_mlp_test(Xb, Yb):
     
     joni_model = [Linear(Xb.shape[1], 256), ReLU(), Linear(256, 10)]
@@ -94,9 +93,7 @@ def custom_mlp_test(Xb, Yb):
         for layer in joni_model:
             x = layer(x)
         out = x 
-        
         loss = joni_loss_f(out, Yb)
-        
         for layer in joni_model:
             layer.zero_grad()
 
@@ -120,7 +117,6 @@ def torch_mlp_test(Xb, Yb):
         nn.Linear(256, 10),
     )
 
-    # Define the loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=LR)
 
