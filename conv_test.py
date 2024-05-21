@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 
 from layers import Linear, ReLU, CrossEntropyLoss, Conv
 
-
-
 BATCH_SIZE = 32
 ITERS = 100
 LR = 0.001
@@ -52,7 +50,6 @@ def main():
         for layer in joni_model:
             layer.zero_grad()
 
-
         dL_dy = joni_loss_f.backward()
         for layer in reversed(joni_model):
             dL_dy = layer.backward(dL_dy)
@@ -61,18 +58,6 @@ def main():
         train_losses.append(loss.item() / BATCH_SIZE)
         if i % 10 == 0:
             print(i)
-        # if i % 100 == 0:
-        #     Xb, Yb = test_X, test_y # batch X,Y
-        #     Xb = joni_model[0](Xb)
-        #     Xb = joni_model[1](Xb)
-        #     Xb = joni_model[2](Xb)
-        #     Xb = Xb.reshape(-1, 24*24)
-        #     Xb = joni_model[3](Xb)
-        #     test_out = joni_model[4](Xb)
-
-        #     test_loss = joni_loss_f(test_out, Yb)
-        #     test_losses.append(test_loss.item() / Xb.shape[0])
-        #     test_iterations.append(i)
 
     end_time = time.time()
 

@@ -75,31 +75,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-def __call__(self, x):
-    self.x = x.astype(np.float32)
-
-    N, H_in, W_in, C_in = x.shape
-    H_out = int(np.floor((H_in - self.kernel_size + 2 * self.padding) / self.stride) + 1)
-    W_out = int(np.floor((W_in - self.kernel_size + 2 * self.padding) / self.stride) + 1)
-    # print(N, H_out, W_out, self.out_channels)
-    out = np.zeros((N, H_out, W_out, self.out_channels), dtype=np.float32)
-
-    self.out_shape = out.shape
-
-    if self.padding != 0:
-        x = np.pad(x, pad_width=((0, 0), (1, 1), (1, 1), (0, 0)), mode='constant', constant_values=0)
-
-    for n in range(N):
-        for k in range(self.out_channels):
-            for i in range(H_out):
-                for j in range(W_out):
-                    mat = x[n, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size, :]
-                    # print(out.shape, mat.shape, self.filters[k, :, :, :].shape)
-                    out[n, i, j, k] = np.sum(mat * self._params["F"].data[k, :, :, :].transpose(1, 2, 0))
-    
-    return out
