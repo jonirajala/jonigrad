@@ -29,10 +29,10 @@ class Parameter(ABC):
         
 
 class Linear(Module):
-    def __init__(self, inp, out):
+    def __init__(self, in_features, out_features):
         super().__init__()
-        self._params["W"] = Parameter(np.zeros((out, inp), dtype=np.float32), True) 
-        self._params["B"] = Parameter(np.zeros((1, out), dtype=np.float32), True)
+        self._params["W"] = Parameter(np.zeros((out_features, in_features), dtype=np.float32), True) 
+        self._params["B"] = Parameter(np.zeros((1, out_features), dtype=np.float32), True)
 
         self.__xavier_init()
 
@@ -68,14 +68,14 @@ class Linear(Module):
         self._params["W"].data = np.random.normal(0.0, np.sqrt(variance), self._params["W"].data.shape)
 
 class Conv(Module):
-    def __init__(self, n_channels, out_channels, kernel_size, stride=1, padding=0):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super().__init__()
-        self.n_channels = n_channels
+        self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self._params["F"] = Parameter(np.random.rand(out_channels, n_channels, kernel_size, kernel_size).astype(np.float32), True)
+        self._params["F"] = Parameter(np.random.rand(out_channels, in_channels, kernel_size, kernel_size).astype(np.float32), True)
    
     
     # def __call__(self, x):
@@ -326,11 +326,10 @@ class LRNorm(Module):
 
 
 class MaxPool(Module):
-    def __init__(self, kernel_size, stride, padding):
+    def __init__(self, kernel_size, stride):
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride
-        self.padding = padding
 
     def __call__(self, x):
         self.x = x
@@ -340,7 +339,6 @@ class MaxPool(Module):
 
 
         out = np.zeros((N, C, out_H, out_W))
-        print(out.shape)
         for n in range(N):
             for k in range(C):
                 for i in range(out_H):
@@ -370,3 +368,35 @@ class MaxPool(Module):
                                     dX[n, k, i*self.stride+m, j*self.stride+l] += dL_dy[n, k, i, j]
         
         return dX
+    
+class Dropout(Module):
+    def __init__(self, p=0.5):
+        super().__init__()
+        self.p = p
+        self.mask = None
+
+    def __call__(self, x, training=True):
+        if training:
+            self.mask = np.random.binomial(1, 1 - self.p, size=x.shape).astype(np.float32)
+            x = x * self.mask
+            x = x / (1-self.p)
+        
+        return x
+
+    def backward(self, dL_dy, training=True):
+        if training:
+            dL_dx = dL_dy * self.mask
+            dL_dx = dL_dx / (1 - self.p)
+        else:
+            dL_dx = dL_dy
+        return dL_dx
+
+class Flatten(Module):
+    def __call__(self, x):
+        self.input_shape = x.shape
+        return x.reshape(x.shape[0], -1)
+    
+    def backward(self, dL_dy):
+        # Reshape the gradient to the shape of the input during the forward pass
+        dl_dx = dL_dy.reshape(self.input_shape)
+        return dl_dx

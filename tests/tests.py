@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 import torch.nn as nn
-from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm
+from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, Dropout
 
 
 class TestLinearLayer(unittest.TestCase):
@@ -332,6 +332,8 @@ class TestLRNorm(unittest.TestCase):
         torch_grad_input = self.input_torch.grad.clone().detach().numpy()
 
         np.testing.assert_allclose(custom_grad_input, torch_grad_input, rtol=1e-6, err_msg="Backward pass gradients do not match!")
+
+
 
 if __name__ == '__main__':
     unittest.main()
