@@ -4,6 +4,7 @@ from abc import ABC
 class Module:
     def __init__(self):
         self._params = {}
+        self._training = True
     
     def step(self, lr):
         for _, val in self._params.items():
@@ -12,6 +13,12 @@ class Module:
     def zero_grad(self):
         for _, val in self._params.items():
             val._zero_grad()
+
+    def train(self):
+        self._training = True
+    
+    def eval(self):
+        self._training = False
 
 
 class Parameter(ABC):
@@ -183,6 +190,8 @@ class Conv(Module):
             dL_dx = dL_dx[:, :, self.padding:-self.padding, self.padding:-self.padding]
 
         return dL_dx
+
+    
 
 class MSELoss:
     def __call__(self, preds, targs):
@@ -375,16 +384,16 @@ class Dropout(Module):
         self.p = p
         self.mask = None
 
-    def __call__(self, x, training=True):
-        if training:
+    def __call__(self, x):
+        if self._training:
             self.mask = np.random.binomial(1, 1 - self.p, size=x.shape).astype(np.float32)
             x = x * self.mask
             x = x / (1-self.p)
         
         return x
 
-    def backward(self, dL_dy, training=True):
-        if training:
+    def backward(self, dL_dy):
+        if self._training:
             dL_dx = dL_dy * self.mask
             dL_dx = dL_dx / (1 - self.p)
         else:
