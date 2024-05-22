@@ -3,25 +3,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from keras.datasets import mnist
 import time
 import matplotlib.pyplot as plt
 
 from jonigrad.layers import Linear, ReLU, CrossEntropyLoss, Conv
+from jonigrad.utils import load_mnist
 
 BATCH_SIZE = 32
 ITERS = 100
 LR = 0.001
 g = np.random.default_rng()  # create a random generator
-
-def load_data():
-    (train_X, train_y), (test_X, test_y) = mnist.load_data()
-    WIDTH, HEIGHT = train_X.shape[1], train_X.shape[2]
-    train_X = train_X.reshape(-1, 1,  HEIGHT, WIDTH).astype(np.float32) / 255.0
-    test_X = test_X.reshape(-1, 1, HEIGHT, WIDTH).astype(np.float32) / 255.0
-    ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
-    Xb, Yb = train_X[ix], train_y[ix]
-    return Xb, Yb
 
 def custom_conv_test(Xb, Yb):
     joni_model = [Conv(1, 3, 3), ReLU(), Conv(3, 1, 3), ReLU(), Linear(576, 10)]
@@ -49,6 +40,7 @@ def custom_conv_test(Xb, Yb):
 
     end_time = time.time()
 
+    
     return end_time-start_time
 
 def torch_conv_test(Xb, Yb):
@@ -137,7 +129,9 @@ def torch_mlp_test(Xb, Yb):
 
 
 def main():
-    Xb, Yb = load_data()
+    train_X, train_y, test_X, test_y = load_mnist(flatten=False)
+    ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
+    Xb, Yb = train_X[ix], train_y[ix]
     print("Running Conv tests")
     custom_dt_conv = custom_conv_test(Xb, Yb)
     torch_dt_conv = torch_conv_test(Xb, Yb)

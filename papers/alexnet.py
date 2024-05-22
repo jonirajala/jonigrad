@@ -21,29 +21,20 @@ Training:
 - weight decay of 0.0005 
 """
 
-from keras.datasets import mnist
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 
 from jonigrad.layers import Conv, ReLU, Linear, LRNorm, MaxPool, Dropout,CrossEntropyLoss, Flatten
+from jonigrad.utils import load_mnist, compute_accuracy
 
 BATCH_SIZE = 32
 ITERS = 100
 LR = 0.00001
 g = np.random.default_rng()  # create a random generator
 
-def load_data():
-    (train_X, train_y), (test_X, test_y) = mnist.load_data()
-    WIDTH, HEIGHT = train_X.shape[1], train_X.shape[2]
-    train_X = train_X.reshape(-1, 1,  HEIGHT, WIDTH).astype(np.float32) / 255.0
-    test_X = test_X.reshape(-1, 1, HEIGHT, WIDTH).astype(np.float32) / 255.0
-
-    return train_X, train_y, test_X, test_y
-
-
 def main():
-    train_X, train_y, test_X, test_y = load_data()
+    train_X, train_y, test_X, test_y = load_mnist(flatten=False)
 
     print("Initializing the alexnet")
     alexnet = []
@@ -92,6 +83,7 @@ def main():
     train_losses = []
     test_losses = []
     test_iterations = []
+    test_accuracies = []
 
     print("Starting training")
     for i in range(ITERS):
@@ -102,13 +94,6 @@ def main():
         for layer in alexnet:
             Xb = layer(Xb)
         out = Xb
-
-        # Xb = alexnet[0](Xb)
-        # Xb = alexnet[1](Xb)
-        # Xb = alexnet[2](Xb)
-        # Xb = alexnet[3](Xb)
-        # Xb = Xb.reshape(-1, 24*24)
-        # out = alexnet[4](Xb)
    
         loss = joni_loss_f(out, Yb)
         
@@ -122,12 +107,26 @@ def main():
             layer.step(LR)
         train_losses.append(loss.item() / BATCH_SIZE)
         if i % 10 == 0:
-            print(i)
+            print(f"Iteration {i}")
+            test_loss = 0
+            for j in range(0, test_X.shape[0], BATCH_SIZE):
+                Xb = test_X[j:j + BATCH_SIZE]
+                Yb = test_y[j:j + BATCH_SIZE]
+                for layer in alexnet:
+                    Xb = layer(Xb)
+                out = Xb
+                test_loss += joni_loss_f(out, Yb).item()
+            test_loss /= (test_X.shape[0] // BATCH_SIZE)
+            test_losses.append(test_loss)
+            test_iterations.append(i)
 
-    end_time = time.time()
+
+    accuracy = compute_accuracy(alexnet, test_X, test_y)
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
     plt.plot(range(ITERS), train_losses, label='Training Loss')
     plt.plot(test_iterations, test_losses, label='Test Loss')
+    plt.legend()
     plt.show()
 
 if __name__ == '__main__':

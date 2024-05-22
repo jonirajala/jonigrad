@@ -1,10 +1,9 @@
-from keras.datasets import mnist
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 
 from jonigrad.layers import Linear, ReLU, CrossEntropyLoss
-
+from jonigrad.utils import compute_accuracy, load_mnist
 
 
 BATCH_SIZE = 64
@@ -12,16 +11,8 @@ ITERS = 1000
 LR = 0.001
 g = np.random.default_rng()  # create a random generator
 
-
-def load_data():
-    (train_X, train_y), (test_X, test_y) = mnist.load_data()
-    train_X = train_X.reshape(train_X.shape[0], -1)
-    test_X = test_X.reshape(test_X.shape[0], -1)
-
-    return train_X, train_y, test_X, test_y
-
 def main():
-    train_X, train_y, test_X, test_y = load_data()
+    train_X, train_y, test_X, test_y = load_mnist(flatten=True)
 
     joni_model = [Linear(train_X.shape[1], 256), ReLU(), Linear(256, 10)]
     joni_loss_f = CrossEntropyLoss()
@@ -66,7 +57,8 @@ def main():
             test_iterations.append(i)
 
     end_time = time.time()
-
+    accuracy = compute_accuracy(joni_model, test_X, test_y)
+    print(f"Test Accuracy: {accuracy * 100:.2f}%")
     print(f"Execution time: {end_time - start_time} seconds")
 
     plt.plot(range(ITERS), train_losses, label='Training Loss')

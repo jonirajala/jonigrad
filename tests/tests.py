@@ -240,7 +240,7 @@ class TestMSELoss(unittest.TestCase):
         print(torch_grad_input)
         self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6), "Gradients do not match!")
 
-class TestMaxPool2D(unittest.TestCase):
+class TestMaxPool(unittest.TestCase):
     def setUp(self):
         self.batch_size = 5
         self.num_channels = 3
@@ -250,7 +250,7 @@ class TestMaxPool2D(unittest.TestCase):
         self.stride = 2
 
         # Initialize custom max pooling layer
-        self.custom_maxpool = MaxPool(kernel_size=self.kernel_size, stride=self.stride, padding=0)
+        self.custom_maxpool = MaxPool(kernel_size=self.kernel_size, stride=self.stride)
 
         # Initialize PyTorch max pooling layer
         self.torch_maxpool = torch.nn.MaxPool2d(kernel_size=self.kernel_size, stride=self.stride)
