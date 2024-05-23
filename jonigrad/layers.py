@@ -1,10 +1,45 @@
 import numpy as np
-from abc import ABC
+from abc import ABC, abstractmethod
 
 class Module:
     def __init__(self):
+        pass
+
+    def __call__(self, x):
+        return self.forward(x)
+
+    def step(self, lr):
+        for layer in self.get_layers():
+            layer.step(lr)
+
+    def train(self):
+        for layer in self.get_layers():
+            layer.train()
+    
+    def eval(self):
+        for layer in self.get_layers():
+            layer.eval()
+
+    def get_layers(self):
+        layers = []
+        for attr_name in dir(self):
+            attr_value = getattr(self, attr_name)
+            if isinstance(attr_value, Layer):
+                layers.append(attr_value)
+        return layers
+    
+    @abstractmethod
+    def forward(self, x):
+        pass
+
+
+class Layer:
+    def __init__(self):
         self._params = {}
         self._training = True
+    
+    def __call__(self, x):
+        return self.forward(x)
     
     def step(self, lr):
         for _, val in self._params.items():
@@ -19,6 +54,10 @@ class Module:
     
     def eval(self):
         self._training = False
+    
+    @abstractmethod
+    def forward(self, x):
+        pass
 
 
 class Parameter(ABC):
@@ -35,7 +74,7 @@ class Parameter(ABC):
         self.grad.fill(0)
         
 
-class Linear(Module):
+class Linear(Layer):
     def __init__(self, in_features, out_features):
         super().__init__()
         self._params["W"] = Parameter(np.zeros((out_features, in_features), dtype=np.float32), True) 
@@ -43,7 +82,7 @@ class Linear(Module):
 
         self.__xavier_init()
 
-    def __call__(self, x):
+    def forward(self, x):
         self.x = x
         # print(x.shape, self.weights.T.shape, self.bias.shape)
         y = x @ self._params["W"].data.T + self._params["B"].data
@@ -74,7 +113,7 @@ class Linear(Module):
         variance = 2.0 / (fan_in + fan_out)
         self._params["W"].data = np.random.normal(0.0, np.sqrt(variance), self._params["W"].data.shape)
 
-class Conv(Module):
+class Conv(Layer):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super().__init__()
         self.in_channels = in_channels
@@ -85,7 +124,7 @@ class Conv(Module):
         self._params["F"] = Parameter(np.random.rand(out_channels, in_channels, kernel_size, kernel_size).astype(np.float32), True)
    
     
-    # def __call__(self, x):
+    # def forward(self, x):
     #     self.x = x.astype(np.float32)
 
     #     N, H_in, W_in, C_in = x.shape
@@ -132,7 +171,7 @@ class Conv(Module):
 
     #     return dL_dx
     
-    def __call__(self, x):
+    def forward(self, x):
         self.x = x.astype(np.float32)
 
         N, C_in, H_in, W_in = x.shape
@@ -194,6 +233,9 @@ class Conv(Module):
     
 
 class MSELoss:
+    def __init__(self):
+        super().__init__()
+
     def __call__(self, preds, targs):
         self.preds = preds
         self.targs = targs
@@ -207,6 +249,9 @@ class MSELoss:
         return dL_dy
 
 class CrossEntropyLoss:
+    def __init__(self):
+        super().__init__()
+
     def __call__(self, preds, targs):
         self.targs = targs
         
@@ -239,11 +284,11 @@ class CrossEntropyLoss:
         return dL_dy
     
 
-class ReLU(Module):
+class ReLU(Layer):
     def __init__(self):
         super().__init__()
 
-    def __call__(self, x):
+    def forward(self, x):
         self.x = x
         self.y = np.maximum(0, x)
         return self.y
@@ -256,7 +301,7 @@ class ReLU(Module):
         self.dL_dx = dL_dx
         return self.dL_dx
 
-class LRNorm(Module):
+class LRNorm(Layer):
     def __init__(self, size, alpha=1e-4, beta=0.75, k=2.0):
         super().__init__()
         self.size = size
@@ -264,7 +309,7 @@ class LRNorm(Module):
         self.beta = beta
         self.k = k
         
-    def __call__(self, x):
+    def forward(self, x):
         self.x = x
         self.norm = np.zeros_like(x)
         N, C, H, W = x.shape
@@ -334,13 +379,13 @@ class LRNorm(Module):
     # return dx
 
 
-class MaxPool(Module):
+class MaxPool(Layer):
     def __init__(self, kernel_size, stride):
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride
 
-    def __call__(self, x):
+    def forward(self, x):
         self.x = x
         N, C, H, W = x.shape
         out_H = (H - self.kernel_size) // self.stride + 1
@@ -378,13 +423,13 @@ class MaxPool(Module):
         
         return dX
     
-class Dropout(Module):
+class Dropout(Layer):
     def __init__(self, p=0.5):
         super().__init__()
         self.p = p
         self.mask = None
 
-    def __call__(self, x):
+    def forward(self, x):
         if self._training:
             self.mask = np.random.binomial(1, 1 - self.p, size=x.shape).astype(np.float32)
             x = x * self.mask
@@ -400,8 +445,8 @@ class Dropout(Module):
             dL_dx = dL_dy
         return dL_dx
 
-class Flatten(Module):
-    def __call__(self, x):
+class Flatten(Layer):
+    def forward(self, x):
         self.input_shape = x.shape
         return x.reshape(x.shape[0], -1)
     
@@ -409,3 +454,52 @@ class Flatten(Module):
         # Reshape the gradient to the shape of the input during the forward pass
         dl_dx = dL_dy.reshape(self.input_shape)
         return dl_dx
+    
+class BatchNorm(Layer):
+    def __init__(self, num_features, eps=1e-5, momentum=0.1):
+        super().__init__()
+        self.eps = eps
+        self.num_features = num_features
+        self.momentum = momentum
+        self.running_mean = np.zeros(num_features)
+        self.running_var = np.ones(num_features)
+        self._params["G"] = Parameter(np.ones(num_features), True)
+        self._params["B"] = Parameter(np.zeros(num_features), True)
+
+    def forward(self, x):
+        assert len(x.shape) == 4
+        self.x = x  # Store x for backward pass
+        if self._training:
+            self.batch_mean = np.mean(x, axis=(0, 2, 3), keepdims=True)
+            self.batch_var = np.var(x, axis=(0, 2, 3), keepdims=True)
+            self.x_norm = (x - self.batch_mean) / np.sqrt(self.batch_var + self.eps)
+            self.running_mean = self.momentum * np.squeeze(self.batch_mean) + (1 - self.momentum) * self.running_mean
+            self.running_var = self.momentum * np.squeeze(self.batch_var) + (1 - self.momentum) * self.running_var
+        else:
+            self.x_norm = (x - self.running_mean.reshape(1, -1, 1, 1)) / np.sqrt(self.running_var.reshape(1, -1, 1, 1) + self.eps)
+
+        out = self._params["G"].data.reshape(1, -1, 1, 1) * self.x_norm + self._params["B"].data.reshape(1, -1, 1, 1)
+        return out
+
+    def backward(self, dL_dy):
+        N, C, H, W = dL_dy.shape
+        batch_var_eps = self.batch_var + self.eps
+
+        dL_dgamma = np.sum(dL_dy * self.x_norm, axis=(0, 2, 3))
+        dL_dbeta = np.sum(dL_dy, axis=(0, 2, 3))
+
+        dL_dx_norm = dL_dy * self._params["G"].data.reshape(1, -1, 1, 1)
+
+        dL_dvar = np.sum(dL_dx_norm * (self.x - self.batch_mean) * -0.5 * np.power(batch_var_eps, -1.5), axis=(0, 2, 3), keepdims=True)
+
+        dL_dmean = np.sum(dL_dx_norm * -1 / np.sqrt(batch_var_eps), axis=(0, 2, 3), keepdims=True) + \
+                   dL_dvar * np.sum(-2 * (self.x - self.batch_mean), axis=(0, 2, 3), keepdims=True) / (N * H * W)
+
+        dL_dx = (dL_dx_norm / np.sqrt(batch_var_eps)) + \
+                (dL_dvar * 2 * (self.x - self.batch_mean) / (N * H * W)) + \
+                (dL_dmean / (N * H * W))
+
+        self.dL_dgamma = dL_dgamma
+        self.dL_dbeta = dL_dbeta
+
+        return dL_dx
