@@ -3,6 +3,11 @@
 JoniGrad is a basic numpy only deep learning framework designed for implementing research papers. The repository includes the core framework, examples, and tests to facilitate deep learning research and development.
 
 
+## Installation
+```sh
+python3 -m pip install -e .
+```
+
 ## How to Run Tests
 To run the tests, use the following command:
 
