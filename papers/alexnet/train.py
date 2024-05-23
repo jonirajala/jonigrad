@@ -47,33 +47,19 @@ def main():
     print("Starting training")
     from tqdm import tqdm
     pbar = tqdm(range(ITERS), desc="Training Progress")
-    
-    # for layer in alexnet:
-        # Xb = layer.train()
+
     alexnet.train()
     for i in pbar:
-        
-        
         ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
         Xb, Yb = train_X[ix], train_y[ix]
 
-        # for layer in alexnet:
-            # Xb = layer(Xb)
-        
         out = alexnet(Xb)
    
         loss = joni_loss_f(out, Yb)
-        
-        # for layer in alexnet:
         alexnet.zero_grad()
 
         dL_dy = joni_loss_f.backward()
         alexnet.backward(dL_dy)
-        # for layer in reversed(alexnet):
-        #     dL_dy = layer.backward(dL_dy)
-        # for layer in alexnet:
-        #     layer.step(LR)
-        
         alexnet.step(LR)
 
         train_losses.append(loss.item())

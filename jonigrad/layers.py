@@ -293,11 +293,12 @@ class CrossEntropyLoss:
 class ReLU(Layer):
     def __init__(self):
         super().__init__()
+        self.x = None
 
     def forward(self, x):
         self.x = x
-        self.y = np.maximum(0, x)
-        return self.y
+        y = np.maximum(0, x)
+        return y
     
     def backward(self, dL_dy):
         if dL_dy.shape != self.x.shape:
