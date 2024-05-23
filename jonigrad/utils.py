@@ -6,9 +6,7 @@ def compute_accuracy(model, test_X, test_y):
     total_predictions = test_X.shape[0]
     for i in range(total_predictions):
         Xb = test_X[i:i+1]
-        for layer in model:
-            Xb = layer(Xb)
-        out = Xb
+        out = model(Xb)
         prediction = np.argmax(out, axis=1)
         if prediction == test_y[i]:
             correct_predictions += 1

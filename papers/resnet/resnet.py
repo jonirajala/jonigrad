@@ -29,11 +29,25 @@ Residual blocks can be divided into two main types:
 
 """
 
-from jonigrad.layers import Conv, BatchNorm, ReLU, Module, MaxPool
+from jonigrad.layers import Conv, BatchNorm, ReLU, Module, MaxPool, AvgPool, Linear
 
 class ResNet(Module):
-    def __init__(self):
+    def __init__(self, num_classes=1000):
         super().__init__()
+        self.input_layer = InputLayer(in_channels=3, out_channels=64, stride=2)
+        self.res_block1 = ResidualBlock(in_channels=64, out_channels=64, stride=1)
+        self.res_block2 = ResidualBlock(in_channels=64, out_channels=128, stride=2)
+        self.res_block3 = ResidualBlock(in_channels=128, out_channels=256, stride=2)
+        self.res_block4 = ResidualBlock(in_channels=256, out_channels=512, stride=2)
+        self.fc_layer = FullyConnectedLayer(num_classes=num_classes)
+    
+    def forward(self, x):
+        x = self.input_layer(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
+        x = self.res_block3(x)
+        y = self.fc_layer(x)
+        return y
 
 
 class ResidualBlock(Module):
@@ -95,11 +109,27 @@ class InputLayer(Module):
         return y
 
     def backward(self, dL_dy):
-        dL_dy = self.maxpool.backward(dL_dx)
+        dL_dx = self.maxpool.backward(dL_dy)
         dL_dx = self.relu.backward(dL_dx)
         dL_dx = self.bn.backward(dL_dx)
         dL_dx = self.conv.backward(dL_dx)
         return dL_dx
 
 class FullyConnectedLayer(Module):
-    pass
+    def __init__(self, num_classes):
+        super().__init__()
+        self.fc = Linear(in_features=512, out_features=num_classes)
+        self.avg_pool = AvgPool(kernel_size=7, stride=1)
+    
+    def forward(self, x):
+        x = self.avg_pool(x)
+        x = x.view(x.size(0), -1)
+        y = self.fc(x)
+        
+        return y
+
+    def backward(self, dL_dy):
+        dL_dx = self.fc.backward(dL_dy)
+        dL_dx = dL_dx.view(dL_dx.size(0), 512, 1, 1)
+        dL_dx = self.avg_pool.backward(dL_dy)
+        return dL_dx

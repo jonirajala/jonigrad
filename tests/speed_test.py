@@ -6,7 +6,7 @@ import torch.optim as optim
 import time
 import matplotlib.pyplot as plt
 
-from jonigrad.layers import Linear, ReLU, CrossEntropyLoss, Conv
+from jonigrad.layers import Linear, ReLU, CrossEntropyLoss, Conv, Module, Flatten
 from jonigrad.utils import load_mnist
 
 BATCH_SIZE = 32
@@ -14,29 +14,76 @@ ITERS = 100
 LR = 0.001
 g = np.random.default_rng()  # create a random generator
 
+comparison_template = """
+Performance Comparison
+----------------------------------------------------------------
+|     Layer      | Custom Time (s)      | Torch Time (s)       |
+|----------------|----------------------|----------------------|
+| Convolutional  | {:<20} | {:<20} |
+| MLP            | {:<20} | {:<20} |
+----------------------------------------------------------------
+"""
+
+class ConvModel(Module):
+    def __init__(self):
+        self.conv1 = Conv(1, 3, 3)
+        self.conv2 = Conv(3, 1, 3)
+        self.fc1 = Linear(576, 10)
+        self.relu1 = ReLU()
+        self.relu2 = ReLU()
+        self.flatten = Flatten()
+    
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.flatten(x)
+        y = self.fc1(x)
+        return y
+    
+    def backward(self, dL_dy):
+        dL_dx = self.fc1.backward(dL_dy)
+        dL_dx = self.flatten.backward(dL_dx)
+        dL_dx = self.relu2.backward(dL_dx)
+        dL_dx = self.conv2.backward(dL_dx)
+        dL_dx = self.relu1.backward(dL_dx)
+        dL_dx = self.conv1.backward(dL_dx)
+        return dL_dx
+
+class MLP(Module):
+    def __init__(self):
+        self.fc1 = Linear(28*28, 256)
+        self.relu = ReLU()
+        self.fc2 = Linear(256, 10)
+    
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        y = self.fc2(x)
+        return y
+    
+    def backward(self, dL_dy):
+        dL_dx = self.fc2.backward(dL_dy)
+        dL_dx = self.relu.backward(dL_dx)
+        dL_dx = self.fc1.backward(dL_dx)
+        return dL_dx
+
+
 def custom_conv_test(Xb, Yb):
-    joni_model = [Conv(1, 3, 3), ReLU(), Conv(3, 1, 3), ReLU(), Linear(576, 10)]
+    jonigrad_model = ConvModel()
     joni_loss_f = CrossEntropyLoss()
 
     start_time = time.time()
 
+    jonigrad_model.train()
     for i in range(ITERS):
         x = Xb
-        x = joni_model[0](x)
-        x = joni_model[1](x)
-        x = joni_model[2](x)
-        x = joni_model[3](x)
-        x = x.reshape(-1, 24*24)
-        out = joni_model[4](x)
+        out = jonigrad_model(x)
         loss = joni_loss_f(out, Yb)
-        for layer in joni_model:
-            layer.zero_grad()
-
+        jonigrad_model.zero_grad()
         dL_dy = joni_loss_f.backward()
-        for layer in reversed(joni_model):
-            dL_dy = layer.backward(dL_dy)
-        for layer in joni_model:
-            layer.step(LR)
+        jonigrad_model.backward(dL_dy)
+        jonigrad_model.step(LR)
 
     end_time = time.time()
 
@@ -75,26 +122,20 @@ def torch_conv_test(Xb, Yb):
 
 def custom_mlp_test(Xb, Yb):
     
-    joni_model = [Linear(Xb.shape[1], 256), ReLU(), Linear(256, 10)]
+    jonigrad_model = MLP()
     joni_loss_f = CrossEntropyLoss()
 
     start_time = time.time()
 
+    jonigrad_model.train()
     for i in range(ITERS):
         x = Xb
-        for layer in joni_model:
-            x = layer(x)
-        out = x 
+        out = jonigrad_model(x)
         loss = joni_loss_f(out, Yb)
-        for layer in joni_model:
-            layer.zero_grad()
-
+        jonigrad_model.zero_grad()
         dL_dy = joni_loss_f.backward()
-        for layer in reversed(joni_model):
-            dL_dy = layer.backward(dL_dy)
-
-        for layer in joni_model:
-            layer.step(LR)
+        jonigrad_model.backward(dL_dy)
+        jonigrad_model.step(LR)
 
     end_time = time.time()
 
@@ -128,6 +169,8 @@ def torch_mlp_test(Xb, Yb):
     return end_time - start_time
 
 
+
+
 def main():
     train_X, train_y, test_X, test_y = load_mnist(flatten=False)
     ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
@@ -141,10 +184,7 @@ def main():
     custom_dt_mlp = custom_mlp_test(Xb, Yb)
     torch_dt_mlp = torch_mlp_test(Xb, Yb)
 
-    print(f"Custom Conv time: {custom_dt_conv} seconds")
-    print(f"Torch Conv time: {torch_dt_conv} seconds")
-    print(f"Custom MLP time: {custom_dt_mlp} seconds")
-    print(f"Torch MLP time: {torch_dt_mlp} seconds")
+    print(comparison_template.format(custom_dt_conv, torch_dt_conv, custom_dt_mlp, torch_dt_mlp))
 
 if __name__ == "__main__":
     main()

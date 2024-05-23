@@ -14,7 +14,7 @@ g = np.random.default_rng()  # create a random generator
 def main():
     train_X, train_y, test_X, test_y = load_mnist(flatten=True)
 
-    joni_model = [Linear(train_X.shape[1], 256), ReLU(), Linear(256, 10)]
+    jonigrad_model = [Linear(train_X.shape[1], 256), ReLU(), Linear(256, 10)]
     joni_loss_f = CrossEntropyLoss()
 
     train_losses = []
@@ -28,27 +28,27 @@ def main():
         ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
         Xb, Yb = train_X[ix], train_y[ix]
 
-        for layer in joni_model:
+        for layer in jonigrad_model:
             Xb = layer(Xb)
    
         out = Xb
         loss = joni_loss_f(out, Yb)
         
-        for layer in joni_model:
+        for layer in jonigrad_model:
             layer.zero_grad()
         
         dL_dy = joni_loss_f.backward()
-        for layer in reversed(joni_model):
+        for layer in reversed(jonigrad_model):
             dL_dy = layer.backward(dL_dy)
         
-        for layer in joni_model:
+        for layer in jonigrad_model:
             layer.step(LR)
 
         train_losses.append(loss.item() / BATCH_SIZE)
 
         if i % 100 == 0:
             Xb, Yb = test_X, test_y # batch X,Y
-            for layer in joni_model:
+            for layer in jonigrad_model:
                 Xb = layer(Xb)
                 
             test_out = Xb
@@ -57,7 +57,7 @@ def main():
             test_iterations.append(i)
 
     end_time = time.time()
-    accuracy = compute_accuracy(joni_model, test_X, test_y)
+    accuracy = compute_accuracy(jonigrad_model, test_X, test_y)
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
     print(f"Execution time: {end_time - start_time} seconds")
 

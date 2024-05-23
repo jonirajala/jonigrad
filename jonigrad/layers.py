@@ -12,6 +12,10 @@ class Module:
         for layer in self.get_layers():
             layer.step(lr)
 
+    def zero_grad(self):
+        for layer in self.get_layers():
+            layer.zero_grad()
+
     def train(self):
         for layer in self.get_layers():
             layer.train()
@@ -26,6 +30,8 @@ class Module:
             attr_value = getattr(self, attr_name)
             if isinstance(attr_value, Layer):
                 layers.append(attr_value)
+            elif isinstance(attr_value, Module) and attr_value != self:
+                layers.extend(attr_value.get_layers())
         return layers
     
     @abstractmethod
@@ -293,13 +299,13 @@ class ReLU(Layer):
         self.y = np.maximum(0, x)
         return self.y
     
-    
     def backward(self, dL_dy):
         if dL_dy.shape != self.x.shape:
             dL_dy = dL_dy.reshape(self.x.shape)
         dL_dx = dL_dy * (self.x > 0).astype(float)
         self.dL_dx = dL_dx
         return self.dL_dx
+
 
 class LRNorm(Layer):
     def __init__(self, size, alpha=1e-4, beta=0.75, k=2.0):
@@ -420,6 +426,49 @@ class MaxPool(Layer):
                             for l in range(self.kernel_size):
                                 if window[m, l] == max_val:
                                     dX[n, k, i*self.stride+m, j*self.stride+l] += dL_dy[n, k, i, j]
+        
+        return dX
+    
+class AvgPool(Layer):
+    def __init__(self, kernel_size, stride):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+
+    def forward(self, x):
+        self.x = x
+        N, C, H, W = x.shape
+        out_H = (H - self.kernel_size) // self.stride + 1
+        out_W = (W - self.kernel_size) // self.stride + 1
+
+
+        out = np.zeros((N, C, out_H, out_W))
+        for n in range(N):
+            for k in range(C):
+                for i in range(out_H):
+                    for j in range(out_W):
+                        window = x[n, k, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size]
+                        avg = np.mean(window)
+                        out[n, k, i, j] = avg
+      
+        return out
+        
+    def backward(self, dL_dy):
+        N, C, H, W = self.x.shape
+        dX = np.zeros_like(self.x)
+
+        out_H = (H - self.kernel_size) // self.stride + 1
+        out_W = (W - self.kernel_size) // self.stride + 1
+
+        for n in range(N):
+            for k in range(C):
+                for i in range(out_H):
+                    for j in range(out_W):
+                        window = self.x[n, k, i*self.stride:i*self.stride+self.kernel_size, j*self.stride:j*self.stride+self.kernel_size]
+                        avg_grad = dL_dy[n, k, i, j] / (self.kernel_size * self.kernel_size)
+                        for m in range(self.kernel_size):
+                            for l in range(self.kernel_size):
+                                dX[n, k, i*self.stride+m, j*self.stride+l] += avg_grad
         
         return dX
     

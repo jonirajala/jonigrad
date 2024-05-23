@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 
 from jonigrad.layers import Conv, ReLU, Linear, LRNorm, MaxPool, Dropout,CrossEntropyLoss, Flatten
 from jonigrad.utils import load_mnist, compute_accuracy
-from alexnet import alexnet
+from alexnet import AlexNet
 
 BATCH_SIZE = 32
 ITERS = 100
@@ -39,44 +39,49 @@ def main():
 
     print("Initializing the alexnet")
     
-
     joni_loss_f = CrossEntropyLoss()
 
     train_losses = []
-
+    alexnet = AlexNet()
 
     print("Starting training")
     from tqdm import tqdm
     pbar = tqdm(range(ITERS), desc="Training Progress")
     
-    for layer in alexnet:
-        Xb = layer.train()
+    # for layer in alexnet:
+        # Xb = layer.train()
+    alexnet.train()
     for i in pbar:
         
         
         ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
         Xb, Yb = train_X[ix], train_y[ix]
 
-        for layer in alexnet:
-            Xb = layer(Xb)
-        out = Xb
+        # for layer in alexnet:
+            # Xb = layer(Xb)
+        
+        out = alexnet(Xb)
    
         loss = joni_loss_f(out, Yb)
         
-        for layer in alexnet:
-            layer.zero_grad()
+        # for layer in alexnet:
+        alexnet.zero_grad()
 
         dL_dy = joni_loss_f.backward()
-        for layer in reversed(alexnet):
-            dL_dy = layer.backward(dL_dy)
-        for layer in alexnet:
-            layer.step(LR)
+        alexnet.backward(dL_dy)
+        # for layer in reversed(alexnet):
+        #     dL_dy = layer.backward(dL_dy)
+        # for layer in alexnet:
+        #     layer.step(LR)
+        
+        alexnet.step(LR)
 
         train_losses.append(loss.item())
         pbar.set_postfix({'train_loss': loss.item()})
 
-    for layer in alexnet:
-        Xb = layer.eval()
+    # for layer in alexnet:
+    #     Xb = layer.eval()
+    alexnet.eval()
     accuracy = compute_accuracy(alexnet, test_X[:(ITERS//5)*BATCH_SIZE], test_y[:(ITERS//5)*BATCH_SIZE])
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
 

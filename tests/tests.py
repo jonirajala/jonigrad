@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 import torch.nn as nn
-from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm
+from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm, AvgPool
 
 
 class TestLinearLayer(unittest.TestCase):
@@ -283,6 +283,56 @@ class TestMaxPool(unittest.TestCase):
 
         # Backward pass through custom layer
         custom_grad_input = self.custom_maxpool.backward(grad_output)
+
+        # Backward pass through PyTorch layer
+        torch_output.backward(grad_output_torch)
+        torch_grad_input = self.input_torch.grad.numpy()
+
+        # Check if gradients are the same
+        np.testing.assert_allclose(custom_grad_input, torch_grad_input, rtol=1e-6, err_msg="Backward pass gradients do not match!")
+
+class TestAvgPool(unittest.TestCase):
+    def setUp(self):
+        self.batch_size = 5
+        self.num_channels = 3
+        self.height = 10
+        self.width = 10
+        self.kernel_size = 2
+        self.stride = 2
+
+        # Initialize custom average pooling layer
+        self.custom_avgpool = AvgPool(kernel_size=self.kernel_size, stride=self.stride)
+
+        # Initialize PyTorch average pooling layer
+        self.torch_avgpool = torch.nn.AvgPool2d(kernel_size=self.kernel_size, stride=self.stride)
+
+        # Create random input tensor
+        self.input = np.random.randn(self.batch_size, self.num_channels, self.height, self.width).astype(np.float32)
+        
+        # Convert to PyTorch tensor
+        self.input_torch = torch.tensor(self.input, requires_grad=True)
+
+    def test_forward_pass(self):
+        # Calculate output using custom average pooling
+        custom_output = self.custom_avgpool.forward(self.input)
+
+        # Calculate output using PyTorch average pooling
+        torch_output = self.torch_avgpool(self.input_torch).detach().numpy()
+
+        # Check if the output values are the same
+        np.testing.assert_allclose(custom_output, torch_output, rtol=1e-6, err_msg="Forward pass outputs do not match!")
+
+    def test_backward_pass(self):
+        # Forward pass through both layers to set input
+        custom_output = self.custom_avgpool.forward(self.input)
+        torch_output = self.torch_avgpool(self.input_torch)
+
+        # Create random gradient for backward pass
+        grad_output = np.random.randn(*custom_output.shape).astype(np.float32)
+        grad_output_torch = torch.from_numpy(grad_output).float()
+
+        # Backward pass through custom layer
+        custom_grad_input = self.custom_avgpool.backward(grad_output)
 
         # Backward pass through PyTorch layer
         torch_output.backward(grad_output_torch)
