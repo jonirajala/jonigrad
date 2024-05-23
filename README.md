@@ -1,6 +1,6 @@
 # JoniGrad
 
-JoniGrad is a basic deep learning framework designed for implementing research papers. The repository includes the core framework, examples, and tests to facilitate deep learning research and development.
+JoniGrad is a basic numpy only deep learning framework designed for implementing research papers. The repository includes the core framework, examples, and tests to facilitate deep learning research and development.
 
 
 ## How to Run Tests
