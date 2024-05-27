@@ -289,6 +289,20 @@ class CrossEntropyLoss:
         dL_dy = (self.y_pred - targs_one_hot) / targs_one_hot.shape[0]
         return dL_dy
     
+class Sigmoid(Layer):
+    def __init__(self):
+        super().__init__()
+        self.x = None
+
+    def forward(self, x):
+        self.x = x
+        y = 1 / (1 + np.exp(-x))
+        return y
+    
+    def backward(self, dL_dy):
+        sigmoid_x = 1 / (1 + np.exp(-self.x))
+        dL_dx = dL_dy * sigmoid_x * (1-sigmoid_x)
+        return dL_dx
 
 class ReLU(Layer):
     def __init__(self):
@@ -306,6 +320,22 @@ class ReLU(Layer):
         dL_dx = dL_dy * (self.x > 0).astype(float)
         self.dL_dx = dL_dx
         return self.dL_dx
+
+class Tanh(Layer):
+    def __init__(self):
+        super().__init__()
+        self.x = None
+
+    def forward(self, x):
+        self.x = x
+        y = np.tanh(x)
+        return y
+    
+    def backward(self, dL_dy):
+        tanh_x = np.tanh(self.x)
+        dL_dx = dL_dy * (1 - np.power(tanh_x, 2))
+        return dL_dx
+        
 
 
 class LRNorm(Layer):

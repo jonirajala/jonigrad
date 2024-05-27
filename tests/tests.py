@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 import torch.nn as nn
-from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm, AvgPool
+from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm, AvgPool, Tanh, Sigmoid
 
 
 class TestLinearLayer(unittest.TestCase):
@@ -95,6 +95,89 @@ class TestReLULayer(unittest.TestCase):
 
         # Check if gradients are the same
         self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6), "Backward pass gradients do not match!")
+
+class TestTanhLayer(unittest.TestCase):
+    def setUp(self):
+        self.batch_size = 3
+        self.input_size = 10
+
+        self.custom_tanh = Tanh()
+
+        self.torch_tanh = nn.Tanh()
+
+        # Create random input
+        self.x = np.random.randn(self.batch_size, self.input_size).astype(np.float32)
+        self.x_torch = torch.from_numpy(self.x).float()
+        self.x_torch.requires_grad_(True)  # Ensure that x_torch requires gradients
+
+    def test_forward_pass(self):
+        # Forward pass through both layers
+        custom_output = self.custom_tanh(self.x)
+        torch_output = self.torch_tanh(self.x_torch).detach().numpy()
+
+        # Check if outputs are the same
+        self.assertTrue(np.allclose(custom_output, torch_output, atol=1e-6), "Forward pass outputs do not match!")
+
+    def test_backward_pass(self):
+        # Forward pass through both layers to set input
+        custom_output = self.custom_tanh(self.x)
+        torch_output = self.torch_tanh(self.x_torch)
+
+        # Create random gradient for backward pass
+        grad_output = np.random.randn(self.batch_size, self.input_size).astype(np.float32)
+        grad_output_torch = torch.from_numpy(grad_output).float()
+
+        # Backward pass through custom layer
+        custom_grad_input = self.custom_tanh.backward(grad_output)
+
+        # Backward pass through PyTorch layer
+        torch_output.backward(grad_output_torch)
+        torch_grad_input = self.x_torch.grad.numpy()
+
+        # Check if gradients are the same
+        self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6), "Backward pass gradients do not match!")
+
+class TestSigmoidLayer(unittest.TestCase):
+    def setUp(self):
+        self.batch_size = 3
+        self.input_size = 10
+
+        self.custom_sigmoid = Sigmoid()
+
+        self.torch_sigmoid = nn.Sigmoid()
+
+        # Create random input
+        self.x = np.random.randn(self.batch_size, self.input_size).astype(np.float32)
+        self.x_torch = torch.from_numpy(self.x).float()
+        self.x_torch.requires_grad_(True)  # Ensure that x_torch requires gradients
+
+    def test_forward_pass(self):
+        # Forward pass through both layers
+        custom_output = self.custom_sigmoid(self.x)
+        torch_output = self.torch_sigmoid(self.x_torch).detach().numpy()
+
+        # Check if outputs are the same
+        self.assertTrue(np.allclose(custom_output, torch_output, atol=1e-6), "Forward pass outputs do not match!")
+
+    def test_backward_pass(self):
+        # Forward pass through both layers to set input
+        custom_output = self.custom_sigmoid(self.x)
+        torch_output = self.torch_sigmoid(self.x_torch)
+
+        # Create random gradient for backward pass
+        grad_output = np.random.randn(self.batch_size, self.input_size).astype(np.float32)
+        grad_output_torch = torch.from_numpy(grad_output).float()
+
+        # Backward pass through custom layer
+        custom_grad_input = self.custom_sigmoid.backward(grad_output)
+
+        # Backward pass through PyTorch layer
+        torch_output.backward(grad_output_torch)
+        torch_grad_input = self.x_torch.grad.numpy()
+
+        # Check if gradients are the same
+        self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6), "Backward pass gradients do not match!")
+
 
 
 class TestConvLayer(unittest.TestCase):
