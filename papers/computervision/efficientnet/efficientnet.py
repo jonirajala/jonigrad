@@ -11,4 +11,8 @@ to balance all dimensions of network width, depth, and resolution during ConvNet
 -> compound scaling method,
 - which use a compound coefficient φ to uniformly scales network width, depth, and resolution in a principled way:
 
+Can be appelied to any network but the paper also introduces efficientnet
+Model:
+
+
 """
