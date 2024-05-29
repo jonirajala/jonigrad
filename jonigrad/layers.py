@@ -593,23 +593,35 @@ class LSTM(Layer):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
-        # Initialize parameters for the first LSTM layer
-        self._params["W_ih_l0"] = Parameter(np.random.randn(4 * hidden_size, input_size).astype(np.float32), True)
-        self._params["B_ih_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
-        self._params["W_hh_l0"] = Parameter(np.random.randn(4 * hidden_size, hidden_size).astype(np.float32), True)
-        self._params["B_hh_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
+        # # Initialize parameters for the first LSTM layer
+        # self._params["W_ih_l0"] = Parameter(np.random.randn(4 * hidden_size, input_size).astype(np.float32), True)
+        # self._params["B_ih_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
+        # self._params["W_hh_l0"] = Parameter(np.random.randn(4 * hidden_size, hidden_size).astype(np.float32), True)
+        # self._params["B_hh_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
+
+        bound_ih = 1 / np.sqrt(input_size)
+        self._params["W_ih_l0"] =  Parameter(np.random.uniform(-bound_ih, bound_ih, (4 * hidden_size, input_size)).astype(np.float32), True)
+        self._params["B_ih_l0"] =  Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
+        
+        bound_hh = 1 / np.sqrt(hidden_size)
+        self._params["W_hh_l0"] =  Parameter(np.random.uniform(-bound_hh, bound_hh, (4 * hidden_size, hidden_size)).astype(np.float32), True)
+        self._params["B_hh_l0"] =  Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
+
 
         self.inp_gate_sigmoid = Sigmoid()
         self.forg_gate_sigmoid = Sigmoid()
         self.cell_gate_tanh = Tanh()
         self.outp_gate_sigmoid = Sigmoid()
 
-    def forward(self, input_tensor, h0, c0):
+    def forward(self, input_tensor, h0=None, c0=None):
         batch_size, seq_length, _ = input_tensor.shape
+        if h0 is None and c0 is None:
+            h0, c0 = self.init_hidden(batch_size)
         h = h0.squeeze(0)
         c = c0.squeeze(0)
         outputs = []
         self.cache = []  # To store intermediate values for backward pass
+        self.batch_size = batch_size
 
         for t in range(seq_length):
             x_t = input_tensor[:, t, :]
@@ -658,7 +670,9 @@ class LSTM(Layer):
         return outputs, h[np.newaxis, :, :], c[np.newaxis, :, :]
 
     
-    def backward(self, grad_output, grad_hn, grad_cn):
+    def backward(self, grad_output, grad_hn=None, grad_cn=None):
+        if grad_hn is None and grad_cn is None:
+            grad_hn, grad_cn = self.init_hidden(self.batch_size)
         grad_hn = grad_hn.squeeze(0)
         grad_cn = grad_cn.squeeze(0)
 
