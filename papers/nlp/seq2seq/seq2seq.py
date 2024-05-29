@@ -34,13 +34,12 @@ class Encoder(Module):
     def forward(self, input_seq):
         embedded = self.embedding.forward(input_seq)
         lstm_out, h, c = self.lstm.forward(embedded)
-        print(h.shape, lstm_out.shape)
         return lstm_out, h, c
 
-    def backward(self, dL_dy):
-        dL_dy = np.expand_dims(dL_dy, 0)
-        print(dL_dy.shape)
-        dL_dy, dh, dc = self.lstm.backward(dL_dy)
+    def backward(self, dL_dy, dh, dc):
+        # dL_dy = np.expand_dims(dL_dy, 0)
+        # print(dL_dy.shape)
+        dL_dy, dh, dc = self.lstm.backward(dL_dy, dh, dc)
         dL_dy = self.embedding.backward(dL_dy)
         return dL_dy, dh, dc
 

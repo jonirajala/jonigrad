@@ -864,21 +864,20 @@ class LSTM(Layer):
 
         dh_next = grad_hn
         dc_next = grad_cn
-        dL_dx = np.zeros((grad_output.shape[0], grad_output.shape[1], self.input_size))
+        dL_dx = np.zeros((self.cache[0][0].shape[0], len(self.cache), self.input_size))
 
         for t in reversed(range(len(self.cache))):
             x_t, h, c, ft, it, c_tilde, ot = self.cache[t]
 
             # Calculate gradients for the output gate
             do = self.outp_gate_sigmoid.backward(
-                (grad_output[:, t, :] + dh_next) * self.cell_gate_tanh.forward(c)
+                (dh_next) * self.cell_gate_tanh.forward(c)
             )
 
             # Calculate gradients for the cell state
             dc = (
-                (grad_output[:, t, :] * ot * (1 - np.tanh(c) ** 2))
+                (dh_next * ot * (1 - np.tanh(c) ** 2))
                 + dc_next
-                + (dh_next * ot * (1 - np.tanh(c) ** 2))
             )
 
             # Calculate gradients for the input gate
@@ -965,6 +964,7 @@ class LSTM(Layer):
         self._params["B_hh_l0"].grad = dB_hh_l0
 
         return dL_dx, dh_next[np.newaxis, :, :], dc_next[np.newaxis, :, :]
+
 
     def init_hidden(self, batch_size):
         # Initialize hidden state and cell state to zeros
