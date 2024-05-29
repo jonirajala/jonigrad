@@ -32,3 +32,4 @@ Papers that have been implemented with joni grad can be found under papers/
 - EfficientNet: Proposes a model scaling method that uniformly scales all dimensions of depth, width, and resolution using a compound coefficient.
 - ResNet: Introduces residual learning to ease the training of deep neural networks, enabling the training of networks with significantly deeper layers.
 - Vision Transformer: Applies the transformer architecture, traditionally used for natural language processing, to vision tasks, demonstrating high performance with sufficient data.
+- Seq2Seq: The paper addresses the problem of sequence transduction, where an input sequence is transformed into an output sequence. In this paper, we show that a straightforward application of the Long Short-Term Memor(LSTM) architecture [16] can solve general sequence to sequence problems.

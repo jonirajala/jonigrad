@@ -92,14 +92,9 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
         dL_dy = loss_f.backward()
 
         dL_dy = dL_dy.reshape(batch_size, trg_len - 1, trg_vocab_size)
-        # Backward pass through the decoder
         dL_dy_decoder = dL_dy
         
         dL_dy_decoder, dh, dc = decoder.backward(dL_dy_decoder)
-        # dh = dh.reshape(batch_size, -1)
-        # dc = dc.reshape(batch_size, -1)
-
-        # Backward pass through the encoder
         dL_dy_encoder = encoder.backward(dL_dy_decoder, dh, dc)
 
         encoder.step(LR)
