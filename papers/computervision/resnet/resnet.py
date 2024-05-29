@@ -29,7 +29,17 @@ Residual blocks can be divided into two main types:
 
 """
 
-from jonigrad.layers import Conv, BatchNorm, ReLU, Module, MaxPool, AvgPool, Linear, Flatten
+from jonigrad.layers import (
+    Conv,
+    BatchNorm,
+    ReLU,
+    Module,
+    MaxPool,
+    AvgPool,
+    Linear,
+    Flatten,
+)
+
 
 class ResNet(Module):
     def __init__(self, num_classes=10):
@@ -40,7 +50,7 @@ class ResNet(Module):
         self.res_block3 = ResidualBlock(in_channels=32, out_channels=32, stride=1)
         self.res_block4 = ResidualBlock(in_channels=32, out_channels=64, stride=1)
         self.fc_layer = FullyConnectedLayer(num_classes=num_classes)
-    
+
     def forward(self, x):
         x = self.input_layer(x)
         x = self.res_block1(x)
@@ -49,7 +59,7 @@ class ResNet(Module):
         x = self.res_block4(x)
         y = self.fc_layer(x)
         return y
-    
+
     def backward(self, dL_dy):
         dL_dx = self.fc_layer.backward(dL_dy)
         dL_dx = self.res_block4.backward(dL_dx)
@@ -66,16 +76,22 @@ class ResidualBlock(Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.stride = stride
-        self.conv1 = Conv(in_channels, out_channels, kernel_size=3, stride=stride, padding=1)
-        self.conv2 = Conv(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv1 = Conv(
+            in_channels, out_channels, kernel_size=3, stride=stride, padding=1
+        )
+        self.conv2 = Conv(
+            out_channels, out_channels, kernel_size=3, stride=1, padding=1
+        )
         self.relu1 = ReLU()
         self.relu2 = ReLU()
         self.bn1 = BatchNorm(out_channels)
         self.bn2 = BatchNorm(out_channels)
         self.shortcut = None
         if stride != 1 or in_channels != out_channels:
-            self.shortcut = Conv(in_channels, out_channels, kernel_size=1, stride=stride)
-    
+            self.shortcut = Conv(
+                in_channels, out_channels, kernel_size=1, stride=stride
+            )
+
     def forward(self, x):
         identity = x
         out = self.conv1(x)
@@ -83,46 +99,47 @@ class ResidualBlock(Module):
         out = self.relu1(out)
         out = self.conv2(out)
         out = self.bn2(out)
-        
+
         if self.shortcut is not None:
             identity = self.shortcut(x)
-        
+
         out += identity
         out = self.relu2(out)
         return out
-    
+
     def backward(self, dL_dy):
         dL_dx = self.relu2.backward(dL_dy)
         didentity = dL_dx
         dL_dx = self.bn2.backward(dL_dx)
         dL_dx = self.conv2.backward(dL_dx)
-        
+
         # Backprop through the ReLU, BatchNorm, and Conv layers in the first part of forward
         dL_dx = self.relu1.backward(dL_dx)
         dL_dx = self.bn1.backward(dL_dx)
         dL_dx = self.conv1.backward(dL_dx)
-        
+
         # Handle the shortcut path
         if self.shortcut is not None:
             dshortcut = self.shortcut.backward(didentity)
         else:
             dshortcut = didentity
-        
+
         # Sum the gradients from the main path and shortcut path
         dL_dx += dshortcut
-        
+
         return dL_dx
 
 
 class InputLayer(Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
-        self.conv = Conv(in_channels, out_channels, kernel_size=7, stride=stride, padding=3)
+        self.conv = Conv(
+            in_channels, out_channels, kernel_size=7, stride=stride, padding=3
+        )
         self.bn = BatchNorm(out_channels)
         self.relu = ReLU()
         self.maxpool = MaxPool(kernel_size=3, stride=2)
-        
-    
+
     def forward(self, x):
         y = self.relu(self.bn(self.conv(x)))
         y = self.maxpool(y)
@@ -135,18 +152,19 @@ class InputLayer(Module):
         dL_dx = self.conv.backward(dL_dx)
         return dL_dx
 
+
 class FullyConnectedLayer(Module):
     def __init__(self, num_classes):
         super().__init__()
         self.fc = Linear(in_features=3136, out_features=num_classes)
         self.avg_pool = AvgPool(kernel_size=7, stride=1)
         self.flatten = Flatten()
-    
+
     def forward(self, x):
         x = self.avg_pool(x)
         x = self.flatten(x)
         y = self.fc(x)
-        
+
         return y
 
     def backward(self, dL_dy):

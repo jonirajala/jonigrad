@@ -33,7 +33,9 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from jonigrad.layers import Conv, ReLU, Linear, LRNorm, MaxPool, Dropout,CrossEntropyLoss, Flatten
+from jonigrad.layers import (
+    CrossEntropyLoss,
+)
 from jonigrad.utils import load_mnist, compute_accuracy
 from resnet import ResNet
 
@@ -42,11 +44,12 @@ ITERS = 100
 LR = 0.001
 g = np.random.default_rng()  # create a random generator
 
+
 def main():
     train_X, train_y, test_X, test_y = load_mnist(flatten=False)
 
     print("Initializing the resnet")
-    
+
     joni_loss_f = CrossEntropyLoss()
 
     train_losses = []
@@ -54,14 +57,14 @@ def main():
 
     print("Starting training")
     from tqdm import tqdm
+
     pbar = tqdm(range(ITERS), desc="Training Progress")
-    
+
     resnet.train()
-    for i in pbar:        
+    for i in pbar:
         ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
         Xb, Yb = train_X[ix], train_y[ix]
 
-        
         out = resnet(Xb)
         loss = joni_loss_f(out, Yb)
         resnet.zero_grad()
@@ -70,21 +73,20 @@ def main():
         resnet.step(LR)
 
         train_losses.append(loss.item())
-        pbar.set_postfix({'train_loss': loss.item()})
+        pbar.set_postfix({"train_loss": loss.item()})
     # for layer in resnet:
     #     Xb = layer.eval()
     resnet.eval()
-    accuracy = compute_accuracy(resnet, test_X[:(ITERS//5)*BATCH_SIZE], test_y[:(ITERS//5)*BATCH_SIZE])
+    accuracy = compute_accuracy(
+        resnet, test_X[: (ITERS // 5) * BATCH_SIZE], test_y[: (ITERS // 5) * BATCH_SIZE]
+    )
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
-    plt.plot(range(ITERS), train_losses, label='Training Loss')
+    plt.plot(range(ITERS), train_losses, label="Training Loss")
     # plt.plot(test_iterations, test_losses, label='Test Loss')
     plt.legend()
     plt.show()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-
-
-
-

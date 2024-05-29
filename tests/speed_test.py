@@ -24,6 +24,7 @@ Performance Comparison
 ----------------------------------------------------------------
 """
 
+
 class ConvModel(Module):
     def __init__(self):
         self.conv1 = Conv(1, 3, 3)
@@ -32,7 +33,7 @@ class ConvModel(Module):
         self.relu1 = ReLU()
         self.relu2 = ReLU()
         self.flatten = Flatten()
-    
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.relu1(x)
@@ -41,7 +42,7 @@ class ConvModel(Module):
         x = self.flatten(x)
         y = self.fc1(x)
         return y
-    
+
     def backward(self, dL_dy):
         dL_dx = self.fc1.backward(dL_dy)
         dL_dx = self.flatten.backward(dL_dx)
@@ -51,17 +52,18 @@ class ConvModel(Module):
         dL_dx = self.conv1.backward(dL_dx)
         return dL_dx
 
+
 class MLP(Module):
     def __init__(self):
-        self.fc1 = Linear(28*28, 256)
+        self.fc1 = Linear(28 * 28, 256)
         self.relu = ReLU()
         self.fc2 = Linear(256, 10)
-    
+
     def forward(self, x):
         x = self.relu(self.fc1(x))
         y = self.fc2(x)
         return y
-    
+
     def backward(self, dL_dy):
         dL_dx = self.fc2.backward(dL_dy)
         dL_dx = self.relu.backward(dL_dx)
@@ -70,25 +72,25 @@ class MLP(Module):
 
 
 def custom_conv_test(Xb, Yb):
-    jonigrad_model = ConvModel()
-    joni_loss_f = CrossEntropyLoss()
+    model = ConvModel()
+    loss_f = CrossEntropyLoss()
 
     start_time = time.time()
 
-    jonigrad_model.train()
+    model.train()
     for i in range(ITERS):
         x = Xb
-        out = jonigrad_model(x)
-        loss = joni_loss_f(out, Yb)
-        jonigrad_model.zero_grad()
-        dL_dy = joni_loss_f.backward()
-        jonigrad_model.backward(dL_dy)
-        jonigrad_model.step(LR)
+        out = model(x)
+        loss = loss_f(out, Yb)
+        model.zero_grad()
+        dL_dy = loss_f.backward()
+        model.backward(dL_dy)
+        model.step(LR)
 
     end_time = time.time()
 
-    
-    return end_time-start_time
+    return end_time - start_time
+
 
 def torch_conv_test(Xb, Yb):
     # Define the model
@@ -98,7 +100,7 @@ def torch_conv_test(Xb, Yb):
         nn.Conv2d(3, 1, kernel_size=3, padding=0, bias=False),
         nn.ReLU(),
         nn.Flatten(),
-        nn.Linear(24*24, 10)
+        nn.Linear(24 * 24, 10),
     )
 
     # Define the loss function and optimizer
@@ -120,30 +122,32 @@ def torch_conv_test(Xb, Yb):
 
     return end_time - start_time
 
+
 def custom_mlp_test(Xb, Yb):
-    
-    jonigrad_model = MLP()
-    joni_loss_f = CrossEntropyLoss()
+
+    model = MLP()
+    loss_f = CrossEntropyLoss()
 
     start_time = time.time()
 
-    jonigrad_model.train()
+    model.train()
     for i in range(ITERS):
         x = Xb
-        out = jonigrad_model(x)
-        loss = joni_loss_f(out, Yb)
-        jonigrad_model.zero_grad()
-        dL_dy = joni_loss_f.backward()
-        jonigrad_model.backward(dL_dy)
-        jonigrad_model.step(LR)
+        out = model(x)
+        loss = loss_f(out, Yb)
+        model.zero_grad()
+        dL_dy = loss_f.backward()
+        model.backward(dL_dy)
+        model.step(LR)
 
     end_time = time.time()
 
-    return end_time-start_time
+    return end_time - start_time
+
 
 def torch_mlp_test(Xb, Yb):
     # Define the model
-    
+
     model = nn.Sequential(
         nn.Linear(Xb.shape[1], 256),
         nn.ReLU(),
@@ -169,8 +173,6 @@ def torch_mlp_test(Xb, Yb):
     return end_time - start_time
 
 
-
-
 def main():
     train_X, train_y, test_X, test_y = load_mnist(flatten=False)
     ix = g.integers(low=0, high=train_X.shape[0], size=BATCH_SIZE)
@@ -184,7 +186,12 @@ def main():
     custom_dt_mlp = custom_mlp_test(Xb, Yb)
     torch_dt_mlp = torch_mlp_test(Xb, Yb)
 
-    print(comparison_template.format(custom_dt_conv, torch_dt_conv, custom_dt_mlp, torch_dt_mlp))
+    print(
+        comparison_template.format(
+            custom_dt_conv, torch_dt_conv, custom_dt_mlp, torch_dt_mlp
+        )
+    )
+
 
 if __name__ == "__main__":
     main()

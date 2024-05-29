@@ -21,11 +21,12 @@ Training:
 - weight decay of 0.0005 
 """
 
-import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from jonigrad.layers import Conv, ReLU, Linear, LRNorm, MaxPool, Dropout,CrossEntropyLoss, Flatten
+from jonigrad.layers import (
+    CrossEntropyLoss,
+)
 from jonigrad.utils import load_mnist, compute_accuracy
 from alexnet import AlexNet
 
@@ -34,11 +35,12 @@ ITERS = 100
 LR = 0.001
 g = np.random.default_rng()  # create a random generator
 
+
 def main():
     train_X, train_y, test_X, test_y = load_mnist(flatten=False)
 
     print("Initializing the alexnet")
-    
+
     joni_loss_f = CrossEntropyLoss()
 
     train_losses = []
@@ -46,6 +48,7 @@ def main():
 
     print("Starting training")
     from tqdm import tqdm
+
     pbar = tqdm(range(ITERS), desc="Training Progress")
 
     alexnet.train()
@@ -54,7 +57,7 @@ def main():
         Xb, Yb = train_X[ix], train_y[ix]
 
         out = alexnet(Xb)
-   
+
         loss = joni_loss_f(out, Yb)
         alexnet.zero_grad()
 
@@ -63,22 +66,20 @@ def main():
         alexnet.step(LR)
 
         train_losses.append(loss.item())
-        pbar.set_postfix({'train_loss': loss.item()})
+        pbar.set_postfix({"train_loss": loss.item()})
 
-    # for layer in alexnet:
-    #     Xb = layer.eval()
     alexnet.eval()
-    accuracy = compute_accuracy(alexnet, test_X[:(ITERS//5)*BATCH_SIZE], test_y[:(ITERS//5)*BATCH_SIZE])
+    accuracy = compute_accuracy(
+        alexnet,
+        test_X[: (ITERS // 5) * BATCH_SIZE],
+        test_y[: (ITERS // 5) * BATCH_SIZE],
+    )
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
 
-    plt.plot(range(ITERS), train_losses, label='Training Loss')
-    # plt.plot(test_iterations, test_losses, label='Test Loss')
+    plt.plot(range(ITERS), train_losses, label="Training Loss")
     plt.legend()
     plt.show()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-
-
-
-
