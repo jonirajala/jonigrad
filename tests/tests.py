@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 import torch.nn as nn
-from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm, AvgPool, Tanh, Sigmoid
+from jonigrad.layers import Linear, ReLU, Conv, CrossEntropyLoss, MSELoss, MaxPool, LRNorm, BatchNorm, AvgPool, Tanh, Sigmoid, LSTM
 
 
 class TestLinearLayer(unittest.TestCase):
@@ -516,6 +516,79 @@ class TestBatchNormLayer(unittest.TestCase):
 
         # Check if gradients are the same
         self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-5), "Backward pass gradients do not match!")
+
+
+class TestLSTM(unittest.TestCase):
+    def setUp(self):
+        self.input_size = 3
+        self.hidden_size = 2
+        self.num_layers = 1
+        self.batch_size = 1
+        self.seq_length = 1
+
+        self.custom_lstm = LSTM(self.input_size, self.hidden_size, self.num_layers)
+        self.torch_lstm = nn.LSTM(self.input_size, self.hidden_size, self.num_layers)
+
+        # Initialize custom LSTM with the same weights as PyTorch LSTM
+        self.custom_lstm._params["W_ih_l0"].data[:] = self.torch_lstm.weight_ih_l0.detach().numpy()
+        self.custom_lstm._params["W_hh_l0"].data[:] = self.torch_lstm.weight_hh_l0.detach().numpy()
+        self.custom_lstm._params["B_ih_l0"].data[:] = self.torch_lstm.bias_ih_l0.detach().numpy()
+        self.custom_lstm._params["B_hh_l0"].data[:] = self.torch_lstm.bias_hh_l0.detach().numpy()
+
+
+        self.x = np.random.randn(self.batch_size, self.seq_length, self.input_size).astype(np.float32)
+        self.h0 = np.random.randn(self.num_layers, self.batch_size, self.hidden_size).astype(np.float32)
+        self.c0 = np.random.randn(self.num_layers, self.batch_size, self.hidden_size).astype(np.float32)
+
+        self.x_torch = torch.from_numpy(self.x).float().requires_grad_(True)
+        self.h0_torch = torch.from_numpy(self.h0).float().requires_grad_(True)
+        self.c0_torch = torch.from_numpy(self.c0).float().requires_grad_(True)
+
+    def test_forward_pass(self):
+        custom_output, custom_hn, custom_cn = self.custom_lstm.forward(self.x, self.h0, self.c0)
+        torch_output, (torch_hn, torch_cn) = self.torch_lstm(self.x_torch, (self.h0_torch, self.c0_torch))
+
+        # Check if forward outputs match
+        np.testing.assert_allclose(custom_output, torch_output.detach().numpy(), atol=1e-6)
+        np.testing.assert_allclose(custom_hn, torch_hn.detach().numpy(), atol=1e-6)
+        np.testing.assert_allclose(custom_cn, torch_cn.detach().numpy(), atol=1e-6)
+
+    # def test_backward_pass(self):
+    #     # Forward pass through both layers to set input
+    #     custom_output, custom_hn, custom_cn = self.custom_lstm.forward(self.x, self.h0, self.c0)
+    #     torch_output, (torch_hn, torch_cn) = self.torch_lstm(self.x_torch, (self.h0_torch, self.c0_torch))
+
+    #     # Create random gradient for backward pass
+    #     grad_output = np.random.randn(*custom_output.shape).astype(np.float32)
+    #     grad_hn = np.random.randn(*custom_hn.shape).astype(np.float32)
+    #     grad_cn = np.random.randn(*custom_cn.shape).astype(np.float32)
+
+    #     grad_output_torch = torch.from_numpy(grad_output).float()
+
+    #     # Backward pass through custom layer
+    #     self.custom_lstm.zero_grad()
+    #     custom_grad_input, custom_dh0, custom_dc0 = self.custom_lstm.backward(grad_output, grad_hn, grad_cn)
+
+    #     # Backward pass through PyTorch layer
+    #     self.x_torch.retain_grad()
+    #     torch_output.backward(grad_output_torch, retain_graph=True)
+    #     torch_grad_input = self.x_torch.grad.numpy()
+
+    #     # Print gradients for debugging
+    #     print("Custom W_ih_l0 grad:\n", self.custom_lstm._params["W_ih_l0"].grad)
+    #     print("Torch W_ih_l0 grad:\n", self.torch_lstm.weight_ih_l0.grad.numpy())
+    #     print("Custom B_ih_l0 grad:\n", self.custom_lstm._params["B_ih_l0"].grad)
+    #     print("Torch B_ih_l0 grad:\n", self.torch_lstm.bias_ih_l0.grad.numpy())
+    #     print("Custom W_hh_l0 grad:\n", self.custom_lstm._params["W_hh_l0"].grad)
+    #     print("Torch W_hh_l0 grad:\n", self.torch_lstm.weight_hh_l0.grad.numpy())
+    #     print("Custom B_hh_l0 grad:\n", self.custom_lstm._params["B_hh_l0"].grad)
+    #     print("Torch B_hh_l0 grad:\n", self.torch_lstm.bias_hh_l0.grad.numpy())
+
+    #     # Check if gradients are the same
+    #     self.assertTrue(np.allclose(self.custom_lstm._params["W_ih_l0"].grad, self.torch_lstm.weight_ih_l0.grad.numpy(), atol=1e-6), "Input weight gradients do not match!")
+    #     self.assertTrue(np.allclose(self.custom_lstm._params["B_ih_l0"].grad, self.torch_lstm.bias_ih_l0.grad.numpy(), atol=1e-6), "Input bias gradients do not match!")
+    #     self.assertTrue(np.allclose(self.custom_lstm._params["W_hh_l0"].grad, self.torch_lstm.weight_hh_l0.grad.numpy(), atol=1e-6), "Hidden weight gradients do not match!")
+    #     self.assertTrue(np.allclose(self.custom_lstm._params["B_hh_l0"].grad, self.torch_lstm.bias_hh_l0.grad.numpy(), atol=1e-6), "Hidden bias gradients do not match!")
 
 
 if __name__ == '__main__':
