@@ -971,3 +971,25 @@ class LSTM(Layer):
         h0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
         c0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
         return h0, c0
+
+class Embedding(Layer):
+    def __init__(self, vocab_size, emb_dim):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.emb_dim = emb_dim
+        self._params["E"] = Parameter(np.random.rand(vocab_size, emb_dim), True)
+    
+    def forward(self, indices):
+        self.last_indices = indices
+        return self._params["E"].data[indices]
+
+    def backward(self, dL_dy):
+        E_grad = self._params["E"].grad
+        indices = self.last_indices
+        
+        np.add.at(E_grad, indices, dL_dy)
+        
+        # dL_dx can be zero or some placeholder as gradients are not propagated through indices
+        dL_dx = np.zeros_like(indices, dtype=float)
+        
+        return dL_dx

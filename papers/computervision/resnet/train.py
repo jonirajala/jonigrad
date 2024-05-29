@@ -45,7 +45,7 @@ LR = 0.001
 g = np.random.default_rng()  # create a random generator
 
 
-def main():
+def train():
     train_X, train_y, test_X, test_y = load_mnist(flatten=False)
 
     print("Initializing the resnet")
@@ -89,4 +89,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    train()
