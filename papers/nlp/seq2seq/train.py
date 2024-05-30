@@ -7,24 +7,21 @@ from jonigrad.utils import load_fi_en_translations
 from jonigrad.layers import CrossEntropyLoss
 
 BATCH_SIZE = 32
-ITERS = 500
-LR = 0.001
+ITERS = 200
+LR = 0.1
 g = np.random.default_rng()  # create a random generator
-# ENC_EMB_DIM = 256
-# DEC_EMB_DIM = 256
-# HID_DIM = 256
 ENC_EMB_DIM = 256
 DEC_EMB_DIM = 256
 HID_DIM = 256
 N_LAYERS = 1
 ENC_DROPOUT = 0.5
 DEC_DROPOUT = 0.5
+THRESHOLD = 5
 teacher_forcing_ratio=0.5
 
 def translate_sentence(sentence, src_vocab, trg_vocab, encoder, decoder, max_len=50):
-    # Set the models to evaluation mode (if applicable)
-    encoder.eval()  # Uncomment if the models have this method
-    decoder.eval()  # Uncomment if the models have this method
+    encoder.eval() 
+    decoder.eval() 
     
     tokens = [token.lower() for token in sentence.split()]
     tokens = [src_vocab['<SOS>']] + [src_vocab.get(token, src_vocab['<UNK>']) for token in tokens] + [src_vocab['<EOS>']]
@@ -48,9 +45,6 @@ def translate_sentence(sentence, src_vocab, trg_vocab, encoder, decoder, max_len
     trg_tokens = [list(trg_vocab.keys())[list(trg_vocab.values()).index(i)] for i in trg_indexes]
     
     return trg_tokens[1:-1]
-
-# Assuming en_vocab, fi_vocab, encoder, decoder are already defined
-
 
 
 def train(en_data, en_vocab, fi_data, fi_vocab):
@@ -96,6 +90,9 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
         
         dL_dy_decoder, dh, dc = decoder.backward(dL_dy_decoder)
         dL_dy_encoder = encoder.backward(dL_dy_decoder, dh, dc)
+
+        decoder.clip_grad(THRESHOLD, BATCH_SIZE)
+        encoder.clip_grad(THRESHOLD, BATCH_SIZE)
 
         encoder.step(LR)
         decoder.step(LR)

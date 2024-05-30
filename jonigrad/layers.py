@@ -24,6 +24,10 @@ class Module:
     def eval(self):
         for layer in self.get_layers():
             layer.eval()
+    
+    def clip_grad(self, threshold, batch_size):
+        for layer in self.get_layers():
+            layer.clip_grad(threshold, batch_size)
 
     def get_layers(self):
         layers = []
@@ -55,6 +59,10 @@ class Layer:
     def zero_grad(self):
         for _, val in self._params.items():
             val._zero_grad()
+    
+    def clip_grad(self, threshold, batch_size):
+        for _, val in self._params.items():
+            val._clip_grad(threshold, batch_size)
 
     def train(self):
         self._training = True
@@ -79,6 +87,13 @@ class Parameter(ABC):
 
     def _zero_grad(self):
         self.grad.fill(0)
+    
+    def _clip_grad(self, threshold, batch_size):
+        if self.requires_grad:
+            gradient = self.grad / batch_size
+            gradient_norm = np.linalg.norm(gradient)
+            if gradient_norm > threshold:
+                self.grad = (threshold / gradient_norm) * self.grad
 
 
 class Linear(Layer):
