@@ -43,6 +43,7 @@ class Encoder(Module):
         dL_dy = self.embedding.backward(dL_dy)
         return dL_dy, dh, dc
 
+
 class Decoder(Module):
     def __init__(self, output_dim, emb_dim, hid_dim):
         super().__init__()
@@ -53,8 +54,12 @@ class Decoder(Module):
     def forward(self, input_seq, hidden, cell):
         input_seq = np.expand_dims(input_seq, 1)  # (batch_size, 1)
         embedded = self.embedding.forward(input_seq)  # (batch_size, 1, emb_dim)
-        lstm_out, h, c = self.lstm.forward(embedded, hidden, cell)  # lstm_out: (batch_size, 1, hid_dim)
-        predictions = self.linear.forward(lstm_out[:, -1, :])  # (batch_size, output_dim)
+        lstm_out, h, c = self.lstm.forward(
+            embedded, hidden, cell
+        )  # lstm_out: (batch_size, 1, hid_dim)
+        predictions = self.linear.forward(
+            lstm_out[:, -1, :]
+        )  # (batch_size, output_dim)
         return predictions, h, c
 
     def backward(self, dL_dy):

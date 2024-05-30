@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from datasets import load_dataset
 
+
 def compute_accuracy(model, X_test, y_test):
     correct_predictions = 0
     total_predictions = X_test.shape[0]
@@ -47,28 +48,32 @@ def load_temperature_data(seq_length):
 
     return X_train, y_train, X_test, y_test, data, temperatures, scaler
 
+
 def load_fi_en_translations(debug=False):
-    dataset = load_dataset("opus_books", 'en-fi')['train']
-    
+    dataset = load_dataset("opus_books", "en-fi")["train"]
+
     finnish_data = []
     english_data = []
     if debug:
         for i in range(20):
-            finnish_data.append(dataset[i]['translation']['fi'])
-            english_data.append(dataset[i]['translation']['en'])
+            finnish_data.append(dataset[i]["translation"]["fi"])
+            english_data.append(dataset[i]["translation"]["en"])
     else:
         for example in dataset:
-            finnish_data.append(example['translation']['fi'])
-            english_data.append(example['translation']['en'])
-    
-    en_vocab, fi_vocab = build_vocab(english_data), build_vocab(finnish_data)
-    en_data_tok, fi_data_tok = tokenize(en_vocab, english_data), tokenize(fi_vocab, finnish_data)
+            finnish_data.append(example["translation"]["fi"])
+            english_data.append(example["translation"]["en"])
 
-    en_data = pad_sentences(en_data_tok, en_vocab['<PAD>'])
-    fi_data = pad_sentences(fi_data_tok, fi_vocab['<PAD>'])
+    en_vocab, fi_vocab = build_vocab(english_data), build_vocab(finnish_data)
+    en_data_tok, fi_data_tok = tokenize(en_vocab, english_data), tokenize(
+        fi_vocab, finnish_data
+    )
+
+    en_data = pad_sentences(en_data_tok, en_vocab["<PAD>"])
+    fi_data = pad_sentences(fi_data_tok, fi_vocab["<PAD>"])
 
     return en_data, en_vocab, fi_data, fi_vocab
-    
+
+
 def create_sequences(data, seq_length):
     xs, ys = [], []
     for i in range(len(data) - seq_length):
@@ -78,8 +83,9 @@ def create_sequences(data, seq_length):
         ys.append(y)
     return np.array(xs), np.array(ys)
 
+
 def build_vocab(data):
-    special_tokens = ['<PAD>', '<SOS>', '<EOS>', '<UNK>']
+    special_tokens = ["<PAD>", "<SOS>", "<EOS>", "<UNK>"]
     vocab = dict()
     # Initialize vocabularies with special tokens
     for token in special_tokens:
@@ -87,25 +93,28 @@ def build_vocab(data):
 
     for sentence in data:
         for word in sentence.split():
-            if word.lower() not in vocab: vocab[word.lower()] = len(vocab)
-    
+            if word.lower() not in vocab:
+                vocab[word.lower()] = len(vocab)
+
     return vocab
+
 
 def tokenize(vocab, data):
     tok_data = []
 
     for sentence in data:
         sentence_tok = []
-        sentence_tok.append(vocab['<SOS>'])
+        sentence_tok.append(vocab["<SOS>"])
         for word in sentence.split():
             if word.lower() in vocab:
                 sentence_tok.append(vocab[word.lower()])
             else:
-                sentence_tok.append(vocab['<UNK>'])
-        sentence_tok.append(vocab['<EOS>'])
+                sentence_tok.append(vocab["<UNK>"])
+        sentence_tok.append(vocab["<EOS>"])
         tok_data.append(sentence_tok)
-    
+
     return tok_data
+
 
 def pad_sentences(data, pad_token):
     max_len = max(len(sentence) for sentence in data)
@@ -115,4 +124,3 @@ def pad_sentences(data, pad_token):
             sentence.append(pad_token)
         padded_data.append(sentence)
     return np.array(padded_data)
-

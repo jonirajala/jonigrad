@@ -24,7 +24,7 @@ class Module:
     def eval(self):
         for layer in self.get_layers():
             layer.eval()
-    
+
     def clip_grad(self, threshold, batch_size):
         for layer in self.get_layers():
             layer.clip_grad(threshold, batch_size)
@@ -59,7 +59,7 @@ class Layer:
     def zero_grad(self):
         for _, val in self._params.items():
             val._zero_grad()
-    
+
     def clip_grad(self, threshold, batch_size):
         for _, val in self._params.items():
             val._clip_grad(threshold, batch_size)
@@ -87,7 +87,7 @@ class Parameter(ABC):
 
     def _zero_grad(self):
         self.grad.fill(0)
-    
+
     def _clip_grad(self, threshold, batch_size):
         if self.requires_grad:
             gradient = self.grad / batch_size
@@ -890,10 +890,7 @@ class LSTM(Layer):
             )
 
             # Calculate gradients for the cell state
-            dc = (
-                (dh_next * ot * (1 - np.tanh(c) ** 2))
-                + dc_next
-            )
+            dc = (dh_next * ot * (1 - np.tanh(c) ** 2)) + dc_next
 
             # Calculate gradients for the input gate
             di = self.inp_gate_sigmoid.backward(dc * c_tilde)
@@ -980,12 +977,12 @@ class LSTM(Layer):
 
         return dL_dx, dh_next[np.newaxis, :, :], dc_next[np.newaxis, :, :]
 
-
     def init_hidden(self, batch_size):
         # Initialize hidden state and cell state to zeros
         h0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
         c0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
         return h0, c0
+
 
 class Embedding(Layer):
     def __init__(self, vocab_size, emb_dim):
@@ -993,7 +990,7 @@ class Embedding(Layer):
         self.vocab_size = vocab_size
         self.emb_dim = emb_dim
         self._params["E"] = Parameter(np.random.rand(vocab_size, emb_dim), True)
-    
+
     def forward(self, indices):
         self.last_indices = indices
         return self._params["E"].data[indices]
@@ -1001,10 +998,10 @@ class Embedding(Layer):
     def backward(self, dL_dy):
         E_grad = self._params["E"].grad
         indices = self.last_indices
-        
+
         np.add.at(E_grad, indices, dL_dy)
-        
+
         # dL_dx can be zero or some placeholder as gradients are not propagated through indices
         dL_dx = np.zeros_like(indices, dtype=float)
-        
+
         return dL_dx
