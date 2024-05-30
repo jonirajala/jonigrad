@@ -6,27 +6,34 @@ class Module:
     def __init__(self):
         pass
 
-    def __call__(self, x):
-        return self.forward(x)
+    def __call__(self, *inputs):
+        return self.forward(*inputs)
 
     def step(self, lr):
-        for layer in self.get_layers():
+        if len(self.layers) == 0:
+            self.get_layers()
+        for layer in self.layers:
             layer.step(lr)
 
     def zero_grad(self):
-        for layer in self.get_layers():
+        if len(self.layers) == 0:
+            self.get_layers()
+        for layer in self.layers:
             layer.zero_grad()
 
     def train(self):
-        for layer in self.get_layers():
+        self.get_layers()
+        for layer in self.layers:
             layer.train()
 
     def eval(self):
-        for layer in self.get_layers():
+        for layer in self.layers:
             layer.eval()
 
     def clip_grad(self, threshold, batch_size):
-        for layer in self.get_layers():
+        if len(self.layers) == 0:
+            self.get_layers()
+        for layer in self.layers:
             layer.clip_grad(threshold, batch_size)
 
     def get_layers(self):
@@ -37,11 +44,12 @@ class Module:
                 layers.append(attr_value)
             elif isinstance(attr_value, Module) and attr_value != self:
                 layers.extend(attr_value.get_layers())
+        self.layers = layers
         return layers
 
     @abstractmethod
-    def forward(self, x):
-        pass
+    def forward(self, *inputs):
+        raise NotImplementedError
 
 
 class Layer:
@@ -49,8 +57,8 @@ class Layer:
         self._params = {}
         self._training = True
 
-    def __call__(self, x):
-        return self.forward(x)
+    def __call__(self, *inputs):
+        return self.forward(*inputs)
 
     def step(self, lr):
         for _, val in self._params.items():
@@ -71,8 +79,8 @@ class Layer:
         self._training = False
 
     @abstractmethod
-    def forward(self, x):
-        pass
+    def forward(self, *inputs):
+        raise NotImplementedError
 
 
 class Parameter(ABC):
@@ -339,6 +347,26 @@ class MSELoss:
         dL_dy = (2 / self.preds.size) * (self.preds - self.targs)
         self.dL_dy = dL_dy
         return dL_dy
+
+class Softmax:
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x, dim=-1):
+        exp_x = np.exp(x - np.max(x, axis=dim, keepdims=True))  # Subtract max for numerical stability
+        self.y = exp_x / np.sum(exp_x, axis=dim, keepdims=True)
+        return self.y
+
+    def backward(self, dL_dy):
+        y = self.y.reshape(-1, 1)
+
+        # Compute the Jacobian matrix of the softmax function
+        jacobian_matrix = np.diagflat(y) - np.dot(y, y.T)
+        
+        # Compute the gradient of the loss with respect to the input x
+        dL_dx = np.dot(jacobian_matrix, dL_dy)
+        
+        return dL_dx
 
 
 class CrossEntropyLoss:

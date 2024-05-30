@@ -7,7 +7,7 @@ from jonigrad.utils import load_fi_en_translations
 from jonigrad.layers import CrossEntropyLoss
 
 BATCH_SIZE = 32
-ITERS = 200
+ITERS = 1000
 LR = 0.1
 g = np.random.default_rng()  # create a random generator
 ENC_EMB_DIM = 256

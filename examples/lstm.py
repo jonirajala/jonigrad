@@ -22,7 +22,7 @@ class LSTMModel(Module):
         self.linear = Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        lstm_out, _, _ = self.lstm.forward(input_seq)
+        lstm_out, _, _ = self.lstm(input_seq)
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
@@ -43,9 +43,9 @@ class LinearModel(Module):
         self.relu2 = ReLU()
 
     def forward(self, input_seq):
-        y = self.relu1.forward(self.fc1.forward(input_seq))
-        y = self.relu2.forward(self.fc2.forward(y))
-        y = self.fc3.forward(y)
+        y = self.relu1(self.fc1(input_seq))
+        y = self.relu2(self.fc2(y))
+        y = self.fc3(y)
         return y
 
     def backward(self, dL_dy):

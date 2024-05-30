@@ -32,8 +32,8 @@ class Encoder(Module):
         self.lstm = LSTM(emb_dim, hid_dim)
 
     def forward(self, input_seq):
-        embedded = self.embedding.forward(input_seq)
-        lstm_out, h, c = self.lstm.forward(embedded)
+        embedded = self.embedding(input_seq)
+        lstm_out, h, c = self.lstm(embedded)
         return lstm_out, h, c
 
     def backward(self, dL_dy, dh, dc):
@@ -53,11 +53,11 @@ class Decoder(Module):
 
     def forward(self, input_seq, hidden, cell):
         input_seq = np.expand_dims(input_seq, 1)  # (batch_size, 1)
-        embedded = self.embedding.forward(input_seq)  # (batch_size, 1, emb_dim)
-        lstm_out, h, c = self.lstm.forward(
+        embedded = self.embedding(input_seq)  # (batch_size, 1, emb_dim)
+        lstm_out, h, c = self.lstm(
             embedded, hidden, cell
         )  # lstm_out: (batch_size, 1, hid_dim)
-        predictions = self.linear.forward(
+        predictions = self.linear(
             lstm_out[:, -1, :]
         )  # (batch_size, output_dim)
         return predictions, h, c
