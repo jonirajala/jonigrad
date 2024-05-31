@@ -64,18 +64,23 @@ class ConvModel(Module):
 
 class MLPModel(Module):
     def __init__(self):
-        self.fc1 = Linear(28 * 28, 256)
-        self.relu = ReLU()
-        self.fc2 = Linear(256, 10)
+        self.fc1 = Linear(28 * 28, 512)
+        self.relu1 = ReLU()
+        self.fc2 = Linear(512, 512)
+        self.relu2 = ReLU()
+        self.fc3 = Linear(512, 10)
 
     def forward(self, x):
-        x = self.relu(self.fc1(x))
-        y = self.fc2(x)
+        x = self.relu1(self.fc1(x))
+        x = self.relu2(self.fc2(x))
+        y = self.fc3(x)
         return y
 
     def backward(self, dL_dy):
-        dL_dx = self.fc2.backward(dL_dy)
-        dL_dx = self.relu.backward(dL_dx)
+        dL_dx = self.fc3.backward(dL_dy)
+        dL_dx = self.relu2.backward(dL_dx)
+        dL_dx = self.fc2.backward(dL_dx)
+        dL_dx = self.relu1.backward(dL_dx)
         dL_dx = self.fc1.backward(dL_dx)
         return dL_dx
 
@@ -177,9 +182,11 @@ def torch_mlp_test(Xb, Yb):
     # Define the model
 
     model = nn.Sequential(
-        nn.Linear(Xb.shape[1], 256),
+        nn.Linear(Xb.shape[1], 512),
         nn.ReLU(),
-        nn.Linear(256, 10),
+        nn.Linear(512, 512),
+        nn.ReLU(),
+        nn.Linear(512, 10),
     )
 
     loss_fn = nn.CrossEntropyLoss()

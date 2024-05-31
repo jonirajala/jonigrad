@@ -24,7 +24,7 @@ from jonigrad.layers import (
     Conv,
     ReLU,
     Linear,
-    LRNorm,
+    LocalResponseNorm,
     MaxPool,
     Dropout,
     Flatten,
@@ -56,8 +56,8 @@ class AlexNet(Module):
         self.relu5 = ReLU()
         self.relu6 = ReLU()
         self.relu7 = ReLU()
-        self.lr_norm1 = LRNorm(size=5, alpha=1e-4, beta=1, k=2)
-        self.lr_norm2 = LRNorm(size=5, alpha=1e-4, beta=1, k=2)
+        self.lr_norm1 = LocalResponseNorm(size=5, alpha=1e-4, beta=1, k=2)
+        self.lr_norm2 = LocalResponseNorm(size=5, alpha=1e-4, beta=1, k=2)
         self.max_pool1 = MaxPool(kernel_size=3, stride=2)
         self.max_pool2 = MaxPool(kernel_size=3, stride=2)
         self.max_pool3 = MaxPool(kernel_size=2, stride=1)

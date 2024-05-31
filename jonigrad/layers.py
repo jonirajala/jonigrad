@@ -455,7 +455,7 @@ class Tanh(Layer):
         return dL_dx
 
 
-class LRNorm(Layer):
+class LocalResponseNorm(Layer):
     def __init__(self, size, alpha=1e-4, beta=0.75, k=2.0):
         super().__init__()
         self.size = size
@@ -474,27 +474,7 @@ class LRNorm(Layer):
         self.norm = (self.k + (self.alpha / self.size) * self.norm) ** self.beta
         return x / self.norm
 
-    # def backward(self, dL_dy):
-    #     N, C, H, W = self.x.shape
-    #     dx = np.zeros_like(self.x)
 
-    #     squared = np.power(self.x, 2)
-    #     pad = (self.size // 2, )
-    #     squared_padded = np.pad(squared, ((0, 0), (pad[0], pad[0]), (0, 0), (0, 0)), mode='constant', constant_values=0)
-    #     norm_padded = np.pad(self.norm, ((0, 0), (pad[0], pad[0]), (0, 0), (0, 0)), mode='constant', constant_values=0)
-
-    #     for i in range(C):
-    #         for j in range(max(0, i - self.size // 2), min(C, i + self.size // 2 + 1)):
-    #             if j != i:
-    #                 dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
-    #                                    self.x[:, i, :, :] * self.x[:, j, :, :] *
-    #                                    dL_dy[:, j, :, :] / np.power(norm_padded[:, j + pad[0], :, :], self.beta + 1))
-    #             else:
-    #                 dx[:, i, :, :] += dL_dy[:, i, :, :] / self.norm[:, i, :, :]
-    #                 dx[:, i, :, :] += (-2 * self.alpha * self.beta / self.size *
-    #                                    self.x[:, i, :, :] * self.x[:, i, :, :] *
-    #                                    dL_dy[:, i, :, :] / np.power(self.norm[:, i, :, :], self.beta + 1))
-    #     return dx
     def backward(self, dL_dy):
         N, C, H, W = self.x.shape
         dx = np.zeros_like(self.x)
@@ -696,6 +676,43 @@ class Flatten(Layer):
         dl_dx = dL_dy.reshape(self.input_shape)
         return dl_dx
 
+class LayerNorm(Layer):
+    def __init__(self, normalized_shape, eps=1e-5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+
+        self._params["G"] = Parameter(np.ones(normalized_shape), True)
+        self._params["B"] = Parameter(np.zeros(normalized_shape), True)
+
+    def forward(self, x):
+        self.x = x
+        axes = tuple(range(1, x.ndim))
+        self.mean = np.mean(x, axis=axes, keepdims=True)
+        self.var = np.var(x, axis=axes, keepdims=True)
+        self.x_normalized = (x - self.mean) / np.sqrt(self.var + self.eps)
+        y = self._params["G"].data * self.x_normalized + self._params["B"].data
+        return y
+    
+    def backward(self, dL_dy):
+        N, C, H, W = self.x.shape
+        axes = tuple(range(1, dL_dy.ndim))
+
+        # Gradients of gamma (G) and beta (B)
+        dL_dG = np.sum(dL_dy * self.x_normalized, axis=0, keepdims=True)
+        dL_dB = np.sum(dL_dy, axis=0, keepdims=True)
+
+        # Gradient of the input
+        dL_dx_normalized = dL_dy * self._params["G"].data
+        dL_dvar = np.sum(dL_dx_normalized * (self.x - self.mean) * -0.5 * np.power(self.var + self.eps, -1.5), axis=axes, keepdims=True)
+        dL_dmean = np.sum(dL_dx_normalized * -1 / np.sqrt(self.var + self.eps), axis=axes, keepdims=True) + dL_dvar * np.sum(-2 * (self.x - self.mean), axis=axes, keepdims=True) / np.prod(self.normalized_shape)
+        
+        dL_dx = (dL_dx_normalized / np.sqrt(self.var + self.eps)) + (dL_dvar * 2 * (self.x - self.mean) / np.prod(self.normalized_shape)) + (dL_dmean / np.prod(self.normalized_shape))
+
+        self._params["G"].grad = dL_dG
+        self._params["B"].grad = dL_dB
+
+        return dL_dx
 
 class BatchNorm(Layer):
     def __init__(self, num_features, eps=1e-5, momentum=0.1):
