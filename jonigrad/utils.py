@@ -81,7 +81,7 @@ def create_sequences(data, seq_length):
         y = data[i + seq_length]
         xs.append(x)
         ys.append(y)
-    return np.array(xs), np.array(ys)
+    return np.array(xs, dtype=np.int16), np.array(ys, dtype=np.int16)
 
 
 def build_vocab(data):
@@ -123,4 +123,4 @@ def pad_sentences(data, pad_token):
         while len(sentence) < max_len:
             sentence.append(pad_token)
         padded_data.append(sentence)
-    return np.array(padded_data)
+    return np.array(padded_data, dtype=np.int16)

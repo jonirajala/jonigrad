@@ -36,7 +36,7 @@ class TestLinearLayer(unittest.TestCase):
         ).float()
 
         # Create random input
-        self.x = np.random.rand(self.batch_size, self.input_size).astype(np.float32)
+        self.x = np.random.rand(self.batch_size, 12, self.input_size).astype(np.float32)
         self.x_torch = torch.tensor(self.x)
         self.x_torch.requires_grad_(True)
 
@@ -57,13 +57,14 @@ class TestLinearLayer(unittest.TestCase):
         torch_output = self.torch_linear(self.x_torch)
 
         # Create random gradient for backward pass
-        grad_output = np.random.rand(self.batch_size, self.output_size).astype(
+        grad_output = np.random.rand(self.batch_size, 12, self.output_size).astype(
             np.float32
         )
         grad_output_torch = torch.from_numpy(grad_output).float()
 
         # Backward pass through custom layer
         self.custom_linear.zero_grad()
+        print(grad_output.shape)
         custom_grad_input = self.custom_linear.backward(grad_output)
 
         # Backward pass through PyTorch layer

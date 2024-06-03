@@ -113,42 +113,34 @@ class Linear(Layer):
         self._params["B"] = Parameter(
             np.zeros((1, out_features), dtype=np.float32), True
         )
-
         self.__xavier_init()
 
     def forward(self, x):
-        self.x = x
-        # print(x.shape, self.weights.T.shape, self.bias.shape)
+        self.x_shape = x.shape
+        batch_size, *dims, in_features = x.shape
+        x = x.reshape(-1, in_features)  # Flatten all but the last dimension
+        self.x = x  # Store reshaped x for backward pass
         y = x @ self._params["W"].data.T + self._params["B"].data
-        return y
+        return y.reshape(batch_size, *dims, -1)
 
     def backward(self, dL_dy):
-        # Gradient of the loss with respect to the input of the layer
-        # dL_dx = np.dot(self.weights.data.T, dL_dy)
-        # print(dL_dy.shape, self.weights.data.T.shape)
+        batch_size, *dims, out_features = dL_dy.shape
+        dL_dy = dL_dy.reshape(-1, out_features)  # Flatten all but the last dimension
         dL_dx = dL_dy @ self._params["W"].data
-
-        # Gradient of the loss with respect to the weights
-        # print(self.x.T.shape, dL_dy.shape)
-        dL_dW = self.x.T @ dL_dy
-
-        # Gradient of the loss with respect to the biases
+        dL_dW = dL_dy.T @ self.x
         dL_db = np.sum(dL_dy, axis=0, keepdims=True)
 
-        self._params["W"].grad = dL_dW.T
-        self._params["B"].grad = dL_db.squeeze()
+        self._params["W"].grad = dL_dW
+        self._params["B"].grad = dL_db
 
+        dL_dx = dL_dx.reshape(batch_size, *dims, -1)  # Reshape back to input shape
         return dL_dx
 
     def __xavier_init(self):
-        fan_in, fan_out = (
-            self._params["W"].data.shape[1],
-            self._params["W"].data.shape[0],
-        )
+        fan_in, fan_out = self._params["W"].data.shape[1], self._params["W"].data.shape[0]
         variance = 2.0 / (fan_in + fan_out)
-        self._params["W"].data = np.random.normal(
-            0.0, np.sqrt(variance), self._params["W"].data.shape
-        )
+        self._params["W"].data = np.random.normal(0.0, np.sqrt(variance), self._params["W"].data.shape)
+
 
 
 class Conv(Layer):
@@ -355,17 +347,21 @@ class Softmax:
     def __call__(self, x, dim=-1):
         exp_x = np.exp(x - np.max(x, axis=dim, keepdims=True))  # Subtract max for numerical stability
         self.y = exp_x / np.sum(exp_x, axis=dim, keepdims=True)
+        self.y = self.y.astype(np.float32)
         return self.y
 
     def backward(self, dL_dy):
-        y = self.y.reshape(-1, 1)
+        # y = self.y.reshape(-1, 1)
 
-        # Compute the Jacobian matrix of the softmax function
-        jacobian_matrix = np.diagflat(y) - np.dot(y, y.T)
+        # # Compute the Jacobian matrix of the softmax function
+        # jacobian_matrix = np.diagflat(y) - np.dot(y, y.T)
         
-        # Compute the gradient of the loss with respect to the input x
-        dL_dx = np.dot(jacobian_matrix, dL_dy)
+        # # Compute the gradient of the loss with respect to the input x
+        # dL_dx = np.dot(jacobian_matrix, dL_dy)
         
+        # return dL_dx
+        y = self.y
+        dL_dx = y * (dL_dy - np.sum(dL_dy * y, axis=-1, keepdims=True))
         return dL_dx
 
 
@@ -695,7 +691,6 @@ class LayerNorm(Layer):
         return y
     
     def backward(self, dL_dy):
-        N, C, H, W = self.x.shape
         axes = tuple(range(1, dL_dy.ndim))
 
         # Gradients of gamma (G) and beta (B)
@@ -1034,7 +1029,7 @@ class Embedding(Layer):
         super().__init__()
         self.vocab_size = vocab_size
         self.emb_dim = emb_dim
-        self._params["E"] = Parameter(np.random.rand(vocab_size, emb_dim), True)
+        self._params["E"] = Parameter(np.random.rand(vocab_size, emb_dim).astype(np.float32), True)
 
     def forward(self, indices):
         self.last_indices = indices
