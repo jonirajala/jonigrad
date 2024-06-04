@@ -348,10 +348,10 @@ class TestCrossEntropyLoss(unittest.TestCase):
         self.num_classes = 3
 
         # Initialize custom cross-entropy loss
-        self.custom_loss = CrossEntropyLoss()
+        self.custom_loss = CrossEntropyLoss(ignore_index=0)
 
         # Initialize PyTorch cross-entropy loss
-        self.torch_loss = torch.nn.CrossEntropyLoss()
+        self.torch_loss = torch.nn.CrossEntropyLoss(ignore_index=0)
 
         # Create random predictions and targets
         self.preds = np.random.randn(self.batch_size, self.num_classes).astype(
@@ -387,7 +387,8 @@ class TestCrossEntropyLoss(unittest.TestCase):
         torch_loss_value = self.torch_loss(self.preds_torch, self.targs_torch)
         torch_loss_value.backward()
         torch_grad_input = self.preds_torch.grad.numpy()
-
+        print(custom_grad_input)
+        print(torch_grad_input)
         # Check if the gradients are the same
         self.assertTrue(
             np.allclose(custom_grad_input, torch_grad_input, atol=1e-6),

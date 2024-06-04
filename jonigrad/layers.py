@@ -366,8 +366,9 @@ class Softmax:
 
 
 class CrossEntropyLoss:
-    def __init__(self):
+    def __init__(self, ignore_index=-100):
         super().__init__()
+        self.ignore_index = ignore_index
 
     def __call__(self, preds, targs):
         self.targs = targs
@@ -384,10 +385,19 @@ class CrossEntropyLoss:
 
         # If targs is given as class indices, convert to one-hot encoding
         if targs.ndim == 1:
-            targs = np.eye(y_pred.shape[1])[targs]
+            targs_one_hot = np.eye(y_pred.shape[1])[targs]
+        else:
+            targs_one_hot = targs
+
+        mask = np.ones_like(targs, dtype=bool)
+        # Mask out the padding tokens by setting the corresponding rows to zero
+        if self.ignore_index != -100:
+            mask = targs != self.ignore_index
+            targs_one_hot[~mask] = 0
+            y_pred[~mask] = 1  # To prevent log(0) issues, set these to a valid probability
 
         # Calculate cross-entropy loss
-        loss = -np.sum(targs * np.log(y_pred)) / targs.shape[0]
+        loss = -np.sum(targs_one_hot * np.log(y_pred)) / np.sum(mask)
         return loss.astype(np.float32)
 
     def backward(self):
@@ -396,10 +406,28 @@ class CrossEntropyLoss:
         else:
             targs_one_hot = self.targs
 
-        # Gradient of the loss w.r.t. the logits
-        dL_dy = (self.y_pred - targs_one_hot) / targs_one_hot.shape[0]
-        return dL_dy
+        # Mask out the padding tokens by setting the corresponding rows to zero
+        mask = np.ones_like(self.targs, dtype=bool)
+        if self.ignore_index != -100:
+            mask = self.targs != self.ignore_index
+            targs_one_hot[~mask] = 0
 
+        # Gradient of the loss w.r.t. the logits
+        dL_dy = self.y_pred - targs_one_hot
+
+        # Zero out gradients for ignored indices
+        if self.ignore_index != -100:
+            dL_dy[~mask] = 0
+
+        # Normalize the gradient by the number of non-ignored samples
+        dL_dy /= np.sum(mask)
+
+        return dL_dy.astype(np.float32)
+
+
+
+
+    
 
 class Sigmoid(Layer):
     def __init__(self):
