@@ -93,8 +93,9 @@ def build_vocab(data):
 
     for sentence in data:
         for word in sentence.split():
-            if word.lower() not in vocab:
-                vocab[word.lower()] = len(vocab)
+            word = word.lower().replace(".", "").replace(",","")
+            if word not in vocab:
+                vocab[word] = len(vocab)
 
     return vocab
 

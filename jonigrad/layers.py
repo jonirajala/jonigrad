@@ -10,13 +10,13 @@ class Module:
         return self.forward(*inputs)
 
     def step(self, lr):
-        if len(self.layers) == 0:
+        if not hasattr(self, 'layers'):
             self.get_layers()
         for layer in self.layers:
             layer.step(lr)
 
     def zero_grad(self):
-        if len(self.layers) == 0:
+        if not hasattr(self, 'layers'):
             self.get_layers()
         for layer in self.layers:
             layer.zero_grad()
@@ -31,7 +31,7 @@ class Module:
             layer.eval()
 
     def clip_grad(self, threshold, batch_size):
-        if len(self.layers) == 0:
+        if not hasattr(self, 'layers'):
             self.get_layers()
         for layer in self.layers:
             layer.clip_grad(threshold, batch_size)
@@ -46,6 +46,16 @@ class Module:
                 layers.extend(attr_value.get_layers())
         self.layers = layers
         return layers
+    
+    def parameter_count(self):
+        if not hasattr(self, 'layers'):
+            self.get_layers()
+        # if len(self.layers) == 0:
+        #     self.get_layers()
+        n = 0
+        for layer in self.layers:
+            n += layer.parameter_count()
+        return n
 
     @abstractmethod
     def forward(self, *inputs):
@@ -78,6 +88,12 @@ class Layer:
     def eval(self):
         self._training = False
 
+    def parameter_count(self):
+        n = 0
+        for _, val in self._params.items():
+            n += val._parameter_count()
+        return n
+
     @abstractmethod
     def forward(self, *inputs):
         raise NotImplementedError
@@ -102,6 +118,9 @@ class Parameter(ABC):
             gradient_norm = np.linalg.norm(gradient)
             if gradient_norm > threshold:
                 self.grad = (threshold / gradient_norm) * self.grad
+    
+    def _parameter_count(self):
+        return self.grad.size
 
 
 class Linear(Layer):
@@ -384,8 +403,8 @@ class CrossEntropyLoss:
         y_pred = np.clip(y_pred, 1e-12, 1.0 - 1e-12)
 
         # If targs is given as class indices, convert to one-hot encoding
-        if targs.ndim == 1:
-            targs_one_hot = np.eye(y_pred.shape[1])[targs]
+        if targs.ndim <= 2:
+            targs_one_hot = np.eye(y_pred.shape[-1])[targs]
         else:
             targs_one_hot = targs
 
@@ -401,8 +420,8 @@ class CrossEntropyLoss:
         return loss.astype(np.float32)
 
     def backward(self):
-        if self.targs.ndim == 1:
-            targs_one_hot = np.eye(self.y_pred.shape[1])[self.targs]
+        if self.targs.ndim <= 2:
+            targs_one_hot = np.eye(self.y_pred.shape[-1])[self.targs]
         else:
             targs_one_hot = self.targs
 
