@@ -712,10 +712,10 @@ class TestBatchNormLayer(unittest.TestCase):
 
 class TestLayerNormLayer(unittest.TestCase):
     def setUp(self):
-        self.batch_size = 2
+        self.batch_size = 5
         self.num_features = 2
-        self.height = 2
-        self.width = 2
+        self.height = 4
+        self.width = 4
         self.eps = 1e-5
         self.input_shape = (self.batch_size, self.num_features, self.height, self.width)
 

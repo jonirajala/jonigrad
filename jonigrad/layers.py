@@ -677,13 +677,13 @@ class LayerNorm(Layer):
         super().__init__()
         self.normalized_shape = normalized_shape
         self.eps = eps
-
         self._params["G"] = Parameter(np.ones(normalized_shape), True)
         self._params["B"] = Parameter(np.zeros(normalized_shape), True)
 
     def forward(self, x):
         self.x = x
-        axes = tuple(range(1, x.ndim))
+        # print("normshape", self.normalized_shape)
+        axes = tuple(range(x.ndim-len(self.normalized_shape), x.ndim))
         self.mean = np.mean(x, axis=axes, keepdims=True)
         self.var = np.var(x, axis=axes, keepdims=True)
         self.x_normalized = (x - self.mean) / np.sqrt(self.var + self.eps)
@@ -691,21 +691,28 @@ class LayerNorm(Layer):
         return y
     
     def backward(self, dL_dy):
-        axes = tuple(range(1, dL_dy.ndim))
-
+        axes_to_norm = tuple(range(dL_dy.ndim-len(self.normalized_shape), dL_dy.ndim))
+        other_axes = tuple(range(0, dL_dy.ndim-len(self.normalized_shape)))
+        # print("other axes", other_axes)
         # Gradients of gamma (G) and beta (B)
-        dL_dG = np.sum(dL_dy * self.x_normalized, axis=0, keepdims=True)
-        dL_dB = np.sum(dL_dy, axis=0, keepdims=True)
+        # print("inputshape to lr", dL_dy.shape)
+        dL_dG = np.sum(dL_dy * self.x_normalized, axis=other_axes, keepdims=True)
+        dL_dB = np.sum(dL_dy, axis=other_axes, keepdims=True)
 
         # Gradient of the input
         dL_dx_normalized = dL_dy * self._params["G"].data
-        dL_dvar = np.sum(dL_dx_normalized * (self.x - self.mean) * -0.5 * np.power(self.var + self.eps, -1.5), axis=axes, keepdims=True)
-        dL_dmean = np.sum(dL_dx_normalized * -1 / np.sqrt(self.var + self.eps), axis=axes, keepdims=True) + dL_dvar * np.sum(-2 * (self.x - self.mean), axis=axes, keepdims=True) / np.prod(self.normalized_shape)
+        dL_dvar = np.sum(dL_dx_normalized * (self.x - self.mean) * -0.5 * np.power(self.var + self.eps, -1.5), axis=axes_to_norm, keepdims=True)
+        dL_dmean = np.sum(dL_dx_normalized * -1 / np.sqrt(self.var + self.eps), axis=axes_to_norm, keepdims=True) + dL_dvar * np.sum(-2 * (self.x - self.mean), axis=axes_to_norm, keepdims=True) / np.prod(self.normalized_shape)
         
         dL_dx = (dL_dx_normalized / np.sqrt(self.var + self.eps)) + (dL_dvar * 2 * (self.x - self.mean) / np.prod(self.normalized_shape)) + (dL_dmean / np.prod(self.normalized_shape))
 
-        self._params["G"].grad = dL_dG
-        self._params["B"].grad = dL_dB
+        # print(dL_dG.squeeze().shape, self.normalized_shape)
+        # assert list(dL_dG.squeeze().shape) == self.normalized_shape
+        # assert list(dL_dB.squeeze().shape) == self.normalized_shape
+        
+
+        self._params["G"].grad = dL_dG.squeeze()
+        self._params["B"].grad = dL_dB.squeeze()
 
         return dL_dx
 
