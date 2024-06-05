@@ -49,6 +49,63 @@ def load_temperature_data(seq_length):
     return X_train, y_train, X_test, y_test, data, temperatures, scaler
 
 
+
+
+def create_sequences(data, seq_length):
+    xs, ys = [], []
+    for i in range(len(data) - seq_length):
+        x = data[i : i + seq_length]
+        y = data[i + seq_length]
+        xs.append(x)
+        ys.append(y)
+    return np.array(xs, dtype=np.int16), np.array(ys, dtype=np.int16)
+
+
+def build_vocab(data):
+    special_tokens = ["<PAD>", "<SOS>", "<EOS>", "<UNK>"]
+    vocab = dict()
+    # Initialize vocabularies with special tokens
+    for token in special_tokens:
+        vocab[token] = len(vocab)
+
+    for sentence in data:
+        for word in sentence.split():
+            word = word.lower().replace(".", "").replace(",","").replace('"', "")
+            if word not in vocab:
+                vocab[word] = len(vocab)
+
+    return vocab
+
+
+def tokenize(vocab, data):
+    tok_data = []
+
+    for sentence in data:
+        sentence_tok = []
+        sentence_tok.append(vocab["<SOS>"])
+        for word in sentence.split():
+            word = word.lower().replace(".", "").replace(",","").replace('"', "")
+            if word in vocab:
+                sentence_tok.append(vocab[word])
+            else:
+                sentence_tok.append(vocab["<UNK>"])
+        sentence_tok.append(vocab["<EOS>"])
+        tok_data.append(sentence_tok)
+
+    return tok_data
+
+
+def pad_sentences(data, pad_token):
+    max_len = max(len(sentence) for sentence in data)
+    padded_data = []
+    for sentence in data:
+        while len(sentence) < max_len:
+            sentence.append(pad_token)
+        padded_data.append(sentence)
+    return np.array(padded_data, dtype=np.int16)
+
+
+
 def load_fi_en_translations(debug=False):
     dataset = load_dataset("opus_books", "en-fi")["train"]
 
@@ -79,68 +136,25 @@ def load_fi_en_translations(debug=False):
         fi_vocab, finnish_data
     )
 
+    en_data = []
+    fi_data = []
 
-    en_data = pad_sentences(en_data_tok, en_vocab["<PAD>"])
-    fi_data = pad_sentences(fi_data_tok, fi_vocab["<PAD>"])
+    for i in range(len(en_data_tok)):
+        if len(en_data_tok[i]) >= 11 and len(fi_data_tok[i]) >= 11:
+            en_data.append(en_data_tok[i][:11] + [2])
+            fi_data.append(fi_data_tok[i][:11] + [2])
 
+    en_data = np.array(en_data)
+    fi_data = np.array(fi_data)
 
+    # en_data = pad_sentences(en_data_tok, en_vocab["<PAD>"])
+    # fi_data = pad_sentences(fi_data_tok, fi_vocab["<PAD>"])
 
-    # en_data = cut_sentences(en_data_tok, en_vocab["<PAD>"])
-    # fi_data = cut_sentences(fi_data_tok, fi_vocab["<PAD>"])
+    print(f"Finnish vocab {len(fi_vocab)}, English vocab {len(en_vocab)}")
+    print(f"Finnish seq len {fi_data.shape[1]}, English seq len {en_data.shape[1]}")
+    print(f"Sentences {fi_data.shape[0]}")
 
     return en_data, en_vocab, fi_data, fi_vocab
 
-
-def create_sequences(data, seq_length):
-    xs, ys = [], []
-    for i in range(len(data) - seq_length):
-        x = data[i : i + seq_length]
-        y = data[i + seq_length]
-        xs.append(x)
-        ys.append(y)
-    return np.array(xs, dtype=np.int16), np.array(ys, dtype=np.int16)
-
-
-def build_vocab(data):
-    special_tokens = ["<PAD>", "<SOS>", "<EOS>", "<UNK>"]
-    vocab = dict()
-    # Initialize vocabularies with special tokens
-    for token in special_tokens:
-        vocab[token] = len(vocab)
-
-    for sentence in data:
-        for word in sentence.split():
-            word = word.lower().replace(".", "").replace(",","")
-            if word not in vocab:
-                vocab[word] = len(vocab)
-
-    return vocab
-
-
-def tokenize(vocab, data):
-    tok_data = []
-
-    for sentence in data:
-        sentence_tok = []
-        sentence_tok.append(vocab["<SOS>"])
-        for word in sentence.split():
-            word = word.lower().replace(".", "").replace(",","")
-            if word in vocab:
-                sentence_tok.append(vocab[word])
-            else:
-                sentence_tok.append(vocab["<UNK>"])
-        sentence_tok.append(vocab["<EOS>"])
-        tok_data.append(sentence_tok)
-
-    return tok_data
-
-
-def pad_sentences(data, pad_token):
-    max_len = max(len(sentence) for sentence in data)
-    padded_data = []
-    for sentence in data:
-        while len(sentence) < max_len:
-            sentence.append(pad_token)
-        padded_data.append(sentence)
-    return np.array(padded_data, dtype=np.int16)
-
+if __name__ == '__main__':
+    load_fi_en_translations()

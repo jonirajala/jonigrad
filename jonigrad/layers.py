@@ -44,14 +44,14 @@ class Module:
                 layers.append(attr_value)
             elif isinstance(attr_value, Module) and attr_value != self:
                 layers.extend(attr_value.get_layers())
+            elif isinstance(attr_value, Sequential) and attr_value != self:
+                layers.extend(attr_value.get_layers())
         self.layers = layers
         return layers
     
     def parameter_count(self):
         if not hasattr(self, 'layers'):
             self.get_layers()
-        # if len(self.layers) == 0:
-        #     self.get_layers()
         n = 0
         for layer in self.layers:
             n += layer.parameter_count()
@@ -61,6 +61,26 @@ class Module:
     def forward(self, *inputs):
         raise NotImplementedError
 
+class Sequential:
+    def __init__(self, layers=[]):
+        self.seq_layers = layers
+
+    def get_layers(self):
+        layers = []
+        for attr in self.seq_layers:
+            if isinstance(attr, Layer):
+                layers.append(attr)
+            elif isinstance(attr, Module) and attr != self:
+                layers.extend(attr.get_layers())
+            elif isinstance(attr, Sequential) and attr != self:
+                layers.extend(attr.get_layers())
+        self.layers = layers
+        return layers
+
+    def __getitem__(self, idx):
+        if idx >= len(self.seq_layers):
+            raise IndexError(f'Index {idx} is out of bounds for the number of layers {self.seq_layers}')
+        return self.seq_layers[idx]
 
 class Layer:
     def __init__(self):
@@ -393,7 +413,7 @@ class CrossEntropyLoss:
         self.targs = targs
         exp_logits = np.exp(preds - np.max(preds, axis=-1, keepdims=True))
         y_pred = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
-        y_pred = np.clip(y_pred, 1e-12, 1.0 - 1e-12)
+        y_pred = np.clip(y_pred, 1e-9, 1.0 - 1e-9)
         self.y_pred = y_pred
 
         if targs.ndim <= 2:
@@ -403,8 +423,7 @@ class CrossEntropyLoss:
 
         mask = targs != self.ignore_index
         targs_one_hot[~mask] = 0
-        y_pred[~mask] = 1e-12
-
+        y_pred[~mask] = 1e-9
         loss = -np.sum(targs_one_hot * np.log(y_pred)) / np.sum(mask)
         return loss.astype(np.float32)
 
