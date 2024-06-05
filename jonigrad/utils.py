@@ -62,14 +62,31 @@ def load_fi_en_translations(debug=False):
         for example in dataset:
             finnish_data.append(example["translation"]["fi"])
             english_data.append(example["translation"]["en"])
+    
+    dataset = load_dataset("EkBass/fin-eng-dataset")["train"]
+
+    if debug:
+        for i in range(20):
+            finnish_data.append(dataset[i]["Finnish"])
+            english_data.append(dataset[i]["English"])
+    else:
+        for i in range(len(dataset)):
+            finnish_data.append(dataset[i]["Finnish"])
+            english_data.append(dataset[i]["English"])
 
     en_vocab, fi_vocab = build_vocab(english_data), build_vocab(finnish_data)
     en_data_tok, fi_data_tok = tokenize(en_vocab, english_data), tokenize(
         fi_vocab, finnish_data
     )
 
+
     en_data = pad_sentences(en_data_tok, en_vocab["<PAD>"])
     fi_data = pad_sentences(fi_data_tok, fi_vocab["<PAD>"])
+
+
+
+    # en_data = cut_sentences(en_data_tok, en_vocab["<PAD>"])
+    # fi_data = cut_sentences(fi_data_tok, fi_vocab["<PAD>"])
 
     return en_data, en_vocab, fi_data, fi_vocab
 
@@ -107,8 +124,9 @@ def tokenize(vocab, data):
         sentence_tok = []
         sentence_tok.append(vocab["<SOS>"])
         for word in sentence.split():
-            if word.lower() in vocab:
-                sentence_tok.append(vocab[word.lower()])
+            word = word.lower().replace(".", "").replace(",","")
+            if word in vocab:
+                sentence_tok.append(vocab[word])
             else:
                 sentence_tok.append(vocab["<UNK>"])
         sentence_tok.append(vocab["<EOS>"])
@@ -125,3 +143,4 @@ def pad_sentences(data, pad_token):
             sentence.append(pad_token)
         padded_data.append(sentence)
     return np.array(padded_data, dtype=np.int16)
+

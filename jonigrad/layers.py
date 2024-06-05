@@ -391,62 +391,45 @@ class CrossEntropyLoss:
 
     def __call__(self, preds, targs):
         self.targs = targs
-
-        # Compute softmax probabilities from predictions
-        exp_logits = np.exp(preds - np.max(preds, axis=1, keepdims=True))
-        y_pred = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
-
-        # Store the predicted probabilities for backward pass
+        exp_logits = np.exp(preds - np.max(preds, axis=-1, keepdims=True))
+        y_pred = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
+        y_pred = np.clip(y_pred, 1e-12, 1.0 - 1e-12)
         self.y_pred = y_pred
 
-        # Ensure y_pred is clipped to avoid log(0) which is undefined
-        y_pred = np.clip(y_pred, 1e-12, 1.0 - 1e-12)
-
-        # If targs is given as class indices, convert to one-hot encoding
         if targs.ndim <= 2:
             targs_one_hot = np.eye(y_pred.shape[-1])[targs]
         else:
             targs_one_hot = targs
 
-        mask = np.ones_like(targs, dtype=bool)
-        # Mask out the padding tokens by setting the corresponding rows to zero
-        if self.ignore_index != -100:
-            mask = targs != self.ignore_index
-            targs_one_hot[~mask] = 0
-            y_pred[~mask] = 1  # To prevent log(0) issues, set these to a valid probability
+        mask = targs != self.ignore_index
+        targs_one_hot[~mask] = 0
+        y_pred[~mask] = 1e-12
 
-        # Calculate cross-entropy loss
         loss = -np.sum(targs_one_hot * np.log(y_pred)) / np.sum(mask)
         return loss.astype(np.float32)
 
     def backward(self):
+        # Creating one-hot encoding if targets are not already in that form
         if self.targs.ndim <= 2:
             targs_one_hot = np.eye(self.y_pred.shape[-1])[self.targs]
         else:
             targs_one_hot = self.targs
 
-        # Mask out the padding tokens by setting the corresponding rows to zero
-        mask = np.ones_like(self.targs, dtype=bool)
-        if self.ignore_index != -100:
-            mask = self.targs != self.ignore_index
-            targs_one_hot[~mask] = 0
+        # Creating a mask for valid entries (not ignore_index)
+        mask = self.targs != self.ignore_index
+        targs_one_hot[~mask] = 0
 
-        # Gradient of the loss w.r.t. the logits
+        # Calculating the gradient of the loss with respect to the outputs
         dL_dy = self.y_pred - targs_one_hot
 
-        # Zero out gradients for ignored indices
-        if self.ignore_index != -100:
-            dL_dy[~mask] = 0
+        # Applying the mask to zero out gradients for ignored indices
+        dL_dy[~mask] = 0
 
-        # Normalize the gradient by the number of non-ignored samples
+        # Normalizing the gradient by the number of non-ignored samples
         dL_dy /= np.sum(mask)
 
         return dL_dy.astype(np.float32)
 
-
-
-
-    
 
 class Sigmoid(Layer):
     def __init__(self):
