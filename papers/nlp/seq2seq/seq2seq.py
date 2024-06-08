@@ -40,7 +40,7 @@ class Encoder(Module):
         # dL_dy = np.expand_dims(dL_dy, 0)
         # print(dL_dy.shape)
         dL_dy, dh, dc = self.lstm.backward(dL_dy, dh, dc)
-        dL_dy = self.embedding.backward(dL_dy)
+        _ = self.embedding.backward(dL_dy)
         return dL_dy, dh, dc
 
 
@@ -66,5 +66,5 @@ class Decoder(Module):
         dL_dy = self.linear.backward(dL_dy[:, -1, :])  # (batch_size, hid_dim)
         dL_dy = np.expand_dims(dL_dy, 1)  # (batch_size, 1, hid_dim)
         dL_dy, dh, dc = self.lstm.backward(dL_dy)  # (batch_size, 1, emb_dim)
-        dL_dy = self.embedding.backward(dL_dy)  # (batch_size, input_dim)
+        _ = self.embedding.backward(dL_dy)  # (batch_size, input_dim)
         return dL_dy, dh, dc

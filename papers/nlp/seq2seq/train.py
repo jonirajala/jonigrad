@@ -19,7 +19,6 @@ DEC_DROPOUT = 0.5
 THRESHOLD = 5
 teacher_forcing_ratio = 0.5
 
-
 def translate_sentence(sentence, src_vocab, trg_vocab, encoder, decoder, max_len=50):
     encoder.eval()
     decoder.eval()
@@ -65,10 +64,11 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
 
     encoder.train()
     decoder.train()
-    for iter in tqdm(range(ITERS)):
+    pbar = tqdm(range(ITERS), desc="Training Progress")
+    for i in pbar:
         ix = g.integers(low=0, high=en_data.shape[0], size=BATCH_SIZE)
         Xb, Yb = en_data[ix], fi_data[ix]
-
+        
         encoder.zero_grad()
 
         trg_len = Yb.shape[1]
@@ -88,7 +88,7 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
 
         output = outputs[:, 1:].reshape(-1, trg_vocab_size)
         trg = Yb[:, 1:].reshape(-1)
-
+        print(output.shape, trg.shape)
         loss = loss_f(output, trg)
         dL_dy = loss_f.backward()
 
@@ -103,8 +103,18 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
 
         encoder.step(LR)
         decoder.step(LR)
+        pbar.set_postfix({"train_loss": loss.item()})
 
         losses.append(loss.item())
+
+        if i % 10 == 0:
+            test_sentence = "I am a chicken"
+            translation = translate_sentence(
+                test_sentence, en_vocab, fi_vocab, encoder, decoder
+            )
+            print("Translation:", " ".join(translation))
+            encoder.train()
+            decoder.train()
     return losses, encoder, decoder
 
 
@@ -127,3 +137,4 @@ if __name__ == "__main__":
         test_sentence, en_vocab, fi_vocab, encoder, decoder
     )
     print(f'Translation: {" ".join(translation)}')
+

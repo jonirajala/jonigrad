@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 class Module:
     def __init__(self):
-        pass
+        self._training = True
 
     def __call__(self, *inputs):
         return self.forward(*inputs)
@@ -22,11 +22,13 @@ class Module:
             layer.zero_grad()
 
     def train(self):
+        self._training = True
         self.get_layers()
         for layer in self.layers:
             layer.train()
 
     def eval(self):
+        self._training = False
         for layer in self.layers:
             layer.eval()
 
