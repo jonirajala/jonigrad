@@ -4,6 +4,7 @@ import torch.optim as optim
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 from jonigrad.utils import load_fi_en_translations
 
@@ -53,15 +54,15 @@ class Seq2Seq(nn.Module):
         for t in range(1, trg_len):
             output, hidden, cell = self.decoder(input, hidden, cell)
             outputs[t] = output
-            teacher_force = torch.rand(1, generator=generator).item() < teacher_forcing_ratio
+            teacher_force = np.random.random() < teacher_forcing_ratio
             top1 = output.argmax(1)
             input = trg[t, :] if teacher_force else top1
         return outputs
 
 # Hyperparameters
-ENC_EMB_DIM = 512
-DEC_EMB_DIM = 512
-HID_DIM = 512
+ENC_EMB_DIM = 128
+DEC_EMB_DIM = 128
+HID_DIM = 128
 N_LAYERS = 4
 ENC_DROPOUT = 0.5
 DEC_DROPOUT = 0.5
@@ -136,7 +137,7 @@ def train(en_data, en_vocab, fi_data, fi_vocab):
             print(f"Source: {' '.join([list(en_vocab.keys())[list(en_vocab.values()).index(idx)] for idx in src_sentence]).replace('<PAD>', '')}")
             print(f"Translation: {' '.join(translation)}")
 
-    return losses, encoder, decoder
+    return losses, enc, dec
 
 if __name__ == "__main__":
     print("Loading data")

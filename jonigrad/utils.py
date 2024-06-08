@@ -137,27 +137,6 @@ def load_fi_en_translations(debug=False):
         fi_vocab, finnish_data
     )
 
-    # en_data = []
-    # fi_data = []
-
-    # for i in range(len(en_data_tok)):
-    #     if len(en_data_tok[i]) >= 11 and len(fi_data_tok[i]) >= 11:
-    #         en_data.append(en_data_tok[i][1:11])
-    #         fi_data.append(fi_data_tok[i][1:11])
-    #         if len(en_data_tok[i]) >= 21 and len(fi_data_tok[i]) >= 21:
-    #             en_data.append(en_data_tok[i][11:21])
-    #             fi_data.append(fi_data_tok[i][11:21])
-    #             if len(en_data_tok[i]) >= 31 and len(fi_data_tok[i]) >= 31:
-    #                 en_data.append(en_data_tok[i][21:31])
-    #                 fi_data.append(fi_data_tok[i][21:31])
-    #                 if len(en_data_tok[i]) >= 41 and len(fi_data_tok[i]) >= 41:
-    #                     en_data.append(en_data_tok[i][31:41])
-    #                     fi_data.append(fi_data_tok[i][31:41])
-
-    # en_data = np.array(en_data)
-    # fi_data = np.array(fi_data)
-
-
     en_data = pad_sentences(en_data_tok, en_vocab["<PAD>"])
     fi_data = pad_sentences(fi_data_tok, fi_vocab["<PAD>"])
 
