@@ -153,4 +153,4 @@ def load_fi_en_translations(debug=False):
     return en_data, en_vocab, fi_data, fi_vocab
 
 if __name__ == '__main__':
-    load_fi_en_translations()
+    load_fi_en_translations() 

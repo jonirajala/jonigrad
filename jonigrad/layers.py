@@ -841,246 +841,252 @@ class BatchNorm(Layer):
         return dL_dx
 
 
-class LSTM(Layer):
-    def __init__(self, input_size, hidden_size, num_layers=1):
-        super().__init__()
 
+class LSTM(Layer):
+    def __init__(self, input_size, hidden_size, num_layers=1, bidirectional=False, dropout=0):
+        super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.bidirectional = bidirectional
+        self.dropout = dropout if num_layers > 1 else 0
 
-        # # Initialize parameters for the first LSTM layer
-        # self._params["W_ih_l0"] = Parameter(np.random.randn(4 * hidden_size, input_size).astype(np.float32), True)
-        # self._params["B_ih_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
-        # self._params["W_hh_l0"] = Parameter(np.random.randn(4 * hidden_size, hidden_size).astype(np.float32), True)
-        # self._params["B_hh_l0"] = Parameter(np.zeros((4 * hidden_size), dtype=np.float32), True)
-
-        bound_ih = 1 / np.sqrt(input_size)
-        self._params["W_ih_l0"] = Parameter(
-            np.random.uniform(
-                -bound_ih, bound_ih, (4 * hidden_size, input_size)
-            ).astype(np.float32),
-            True,
-        )
-        self._params["B_ih_l0"] = Parameter(
-            np.zeros((4 * hidden_size), dtype=np.float32), True
-        )
-
-        bound_hh = 1 / np.sqrt(hidden_size)
-        self._params["W_hh_l0"] = Parameter(
-            np.random.uniform(
-                -bound_hh, bound_hh, (4 * hidden_size, hidden_size)
-            ).astype(np.float32),
-            True,
-        )
-        self._params["B_hh_l0"] = Parameter(
-            np.zeros((4 * hidden_size), dtype=np.float32), True
-        )
+        for layer in range(num_layers):
+            input_dim = input_size if layer == 0 else hidden_size * (2 if bidirectional else 1)
+            print(input_dim)
+            bound_ih = np.sqrt(1 / input_dim)
+            bound_hh = np.sqrt(1 / hidden_size)
+            self._params[f"W_ih_l{layer}"] = Parameter(
+                np.random.uniform(-bound_ih, bound_ih, (4 * hidden_size, input_dim)).astype(np.float32)
+            )
+            self._params[f"B_ih_l{layer}"] = Parameter(
+                np.zeros((4 * hidden_size), dtype=np.float32)
+            )
+            self._params[f"W_hh_l{layer}"] = Parameter(
+                np.random.uniform(-bound_hh, bound_hh, (4 * hidden_size, hidden_size)).astype(np.float32)
+            )
+            self._params[f"B_hh_l{layer}"] = Parameter(
+                np.zeros((4 * hidden_size), dtype=np.float32)
+            )
+            if bidirectional:
+                self._params[f"W_ih_reverse_l{layer}"] = Parameter(
+                    np.random.uniform(-bound_ih, bound_ih, (4 * hidden_size, input_dim)).astype(np.float32)
+                )
+                self._params[f"B_ih_reverse_l{layer}"] = Parameter(
+                    np.zeros((4 * hidden_size), dtype=np.float32)
+                )
+                self._params[f"W_hh_reverse_l{layer}"] = Parameter(
+                    np.random.uniform(-bound_hh, bound_hh, (4 * hidden_size, hidden_size)).astype(np.float32)
+                )
+                self._params[f"B_hh_reverse_l{layer}"] = Parameter(
+                    np.zeros((4 * hidden_size), dtype=np.float32)
+                )
 
         self.inp_gate_sigmoid = Sigmoid()
         self.forg_gate_sigmoid = Sigmoid()
         self.cell_gate_tanh = Tanh()
         self.outp_gate_sigmoid = Sigmoid()
 
+
+    def init_hidden(self, batch_size):
+        num_directions = 2 if self.bidirectional else 1
+        h0 = np.zeros((self.num_layers * num_directions, batch_size, self.hidden_size), dtype=np.float32)
+        c0 = np.zeros((self.num_layers * num_directions, batch_size, self.hidden_size), dtype=np.float32)
+        return h0, c0
+    
+    def forward_layer(self, x_t, h_prev, c_prev, W_ih, W_hh, B_ih, B_hh):
+        # print(x_t.shape, W_ih.T.shape, B_ih.shape, h_prev.shape, W_hh.shape)
+        gates = np.dot(x_t, W_ih.T) + B_ih + np.dot(h_prev, W_hh.T) + B_hh
+
+        # Split gates
+        i_t = self.inp_gate_sigmoid(gates[:, :self.hidden_size])
+        f_t = self.forg_gate_sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
+        g_t = self.cell_gate_tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
+        o_t = self.outp_gate_sigmoid(gates[:, 3*self.hidden_size:])
+
+        # Cell state and hidden state updates
+        c_new = f_t * c_prev + i_t * g_t
+        h_new = o_t * self.cell_gate_tanh(c_new)
+
+        return h_new, c_new
+
     def forward(self, input_tensor, h0=None, c0=None):
         batch_size, seq_length, _ = input_tensor.shape
-        if h0 is None and c0 is None:
+        if h0 is None or c0 is None:
             h0, c0 = self.init_hidden(batch_size)
-        h = h0.squeeze(0)
-        c = c0.squeeze(0)
+
+        h = h0.copy()
+        c = c0.copy()
         outputs = []
-        self.cache = []  # To store intermediate values for backward pass
-        self.batch_size = batch_size
+        self.cache = []
 
         for t in range(seq_length):
             x_t = input_tensor[:, t, :]
 
-            # Forget gate
-            ft = self.forg_gate_sigmoid(
-                np.dot(
-                    x_t,
-                    self._params["W_ih_l0"]
-                    .data[self.hidden_size : 2 * self.hidden_size, :]
-                    .T,
-                )
-                + np.dot(
-                    h,
-                    self._params["W_hh_l0"]
-                    .data[self.hidden_size : 2 * self.hidden_size, :]
-                    .T,
-                )
-                + self._params["B_ih_l0"].data[self.hidden_size : 2 * self.hidden_size]
-                + self._params["B_hh_l0"].data[self.hidden_size : 2 * self.hidden_size]
-            )
+            layer_h = []
+            layer_c = []
+            x_t_cache = []
+            for layer in range(self.num_layers):
+                h_prev = h[layer]
+                c_prev = c[layer]
 
-            # Input gate
-            it = self.inp_gate_sigmoid(
-                np.dot(x_t, self._params["W_ih_l0"].data[: self.hidden_size, :].T)
-                + np.dot(h, self._params["W_hh_l0"].data[: self.hidden_size, :].T)
-                + self._params["B_ih_l0"].data[: self.hidden_size]
-                + self._params["B_hh_l0"].data[: self.hidden_size]
-            )
+                W_ih = self._params[f"W_ih_l{layer}"].data
+                W_hh = self._params[f"W_hh_l{layer}"].data
+                B_ih = self._params[f"B_ih_l{layer}"].data
+                B_hh = self._params[f"B_hh_l{layer}"].data
 
-            # Candidate cell state
-            c_tilde = self.cell_gate_tanh(
-                np.dot(
-                    x_t,
-                    self._params["W_ih_l0"]
-                    .data[2 * self.hidden_size : 3 * self.hidden_size, :]
-                    .T,
-                )
-                + np.dot(
-                    h,
-                    self._params["W_hh_l0"]
-                    .data[2 * self.hidden_size : 3 * self.hidden_size, :]
-                    .T,
-                )
-                + self._params["B_ih_l0"].data[
-                    2 * self.hidden_size : 3 * self.hidden_size
-                ]
-                + self._params["B_hh_l0"].data[
-                    2 * self.hidden_size : 3 * self.hidden_size
-                ]
-            )
+                h_new, c_new = self.forward_layer(x_t, h_prev, c_prev, W_ih, W_hh, B_ih, B_hh)
+                layer_h.append(h_new)
+                layer_c.append(c_new)
 
-            # Update cell state
-            c = ft * c + it * c_tilde
+                x_t_cache.append(x_t)  # Cache x_t before updating it
+                x_t = h_new
 
-            # Output gate
-            ot = self.outp_gate_sigmoid(
-                np.dot(x_t, self._params["W_ih_l0"].data[3 * self.hidden_size :, :].T)
-                + np.dot(h, self._params["W_hh_l0"].data[3 * self.hidden_size :, :].T)
-                + self._params["B_ih_l0"].data[3 * self.hidden_size :]
-                + self._params["B_hh_l0"].data[3 * self.hidden_size :]
-            )
+                if self.bidirectional:
+                    W_ih_reverse = self._params[f"W_ih_reverse_l{layer}"].data
+                    W_hh_reverse = self._params[f"W_hh_reverse_l{layer}"].data
+                    B_ih_reverse = self._params[f"B_ih_reverse_l{layer}"].data
+                    B_hh_reverse = self._params[f"B_hh_reverse_l{layer}"].data
 
-            # Update hidden state
-            h = ot * self.cell_gate_tanh(c)
-            outputs.append(h)
-            self.cache.append((x_t, h, c, ft, it, c_tilde, ot))
+                    h_reverse, c_reverse = self.forward_layer(
+                        input_tensor[:, seq_length - t - 1, :], h[layer], c[layer], W_ih_reverse, W_hh_reverse, B_ih_reverse, B_hh_reverse
+                    )
+                    h_new = np.concatenate((h_new, h_reverse), axis=-1)
+                    c_new = np.concatenate((c_new, c_reverse), axis=-1)
 
-        outputs = np.stack(
-            outputs, axis=1
-        )  # Shape should be (batch_size, seq_length, hidden_size)
-        return outputs, h[np.newaxis, :, :], c[np.newaxis, :, :]
+                    layer_h[-1] = h_new
+                    layer_c[-1] = c_new
 
-    def backward(self, grad_output, grad_hn=None, grad_cn=None):
-        if grad_hn is None and grad_cn is None:
-            grad_hn, grad_cn = self.init_hidden(self.batch_size)
-        grad_hn = grad_hn.squeeze(0)
-        grad_cn = grad_cn.squeeze(0)
+                    x_t_cache[-1] = x_t  # Cache the updated x_t
 
-        dW_ih_l0 = np.zeros_like(self._params["W_ih_l0"].data)
-        dB_ih_l0 = np.zeros_like(self._params["B_ih_l0"].data)
-        dW_hh_l0 = np.zeros_like(self._params["W_hh_l0"].data)
-        dB_hh_l0 = np.zeros_like(self._params["B_hh_l0"].data)
+            h = np.stack(layer_h, axis=0)
+            c = np.stack(layer_c, axis=0)
+            outputs.append(h[-1])
+            self.cache.append((x_t_cache, h.copy(), c.copy()))  # Cache the list of x_t for each layer
 
-        dh_next = grad_hn
-        dc_next = grad_cn
-        dL_dx = np.zeros((self.cache[0][0].shape[0], len(self.cache), self.input_size))
+        outputs = np.stack(outputs, axis=1)
+        return outputs, h, c
 
-        for t in reversed(range(len(self.cache))):
-            x_t, h, c, ft, it, c_tilde, ot = self.cache[t]
+    def backward(self, grad_output, dh_next=None, dc_next=None):
+        batch_size, seq_length, _ = grad_output.shape
 
-            # Calculate gradients for the output gate
-            do = self.outp_gate_sigmoid.backward(
-                (dh_next) * self.cell_gate_tanh.forward(c)
-            )
+        # Initialize gradients
+        dW_ih = {layer: np.zeros_like(self._params[f"W_ih_l{layer}"].data) for layer in range(self.num_layers)}
+        dW_hh = {layer: np.zeros_like(self._params[f"W_hh_l{layer}"].data) for layer in range(self.num_layers)}
+        dB_ih = {layer: np.zeros_like(self._params[f"B_ih_l{layer}"].data) for layer in range(self.num_layers)}
+        dB_hh = {layer: np.zeros_like(self._params[f"B_hh_l{layer}"].data) for layer in range(self.num_layers)}
 
-            # Calculate gradients for the cell state
-            dc = (dh_next * ot * (1 - np.tanh(c) ** 2)) + dc_next
+        if self.bidirectional:
+            dW_ih_reverse = {layer: np.zeros_like(self._params[f"W_ih_reverse_l{layer}"].data) for layer in range(self.num_layers)}
+            dW_hh_reverse = {layer: np.zeros_like(self._params[f"W_hh_reverse_l{layer}"].data) for layer in range(self.num_layers)}
+            dB_ih_reverse = {layer: np.zeros_like(self._params[f"B_ih_reverse_l{layer}"].data) for layer in range(self.num_layers)}
+            dB_hh_reverse = {layer: np.zeros_like(self._params[f"B_hh_reverse_l{layer}"].data) for layer in range(self.num_layers)}
 
-            # Calculate gradients for the input gate
-            di = self.inp_gate_sigmoid.backward(dc * c_tilde)
+        # Initialize gradients for hidden and cell states
+        dh_next = np.zeros((self.num_layers, batch_size, self.hidden_size))
+        dc_next = np.zeros((self.num_layers, batch_size, self.hidden_size))
 
-            # Calculate gradients for the forget gate
-            df = self.forg_gate_sigmoid.backward(dc * c)
+        if self.bidirectional:
+            dh_next_reverse = np.zeros_like(dh_next)
+            dc_next_reverse = np.zeros_like(dc_next)
 
-            # Calculate gradients for the candidate cell state
-            dc_tilde = self.cell_gate_tanh.backward(dc * it)
+        # Initialize gradient for input
+        grad_input = np.zeros((batch_size, seq_length, self.input_size))
 
-            # Update gradients for the input weights
-            dW_ih_l0[: self.hidden_size] += np.dot(di.T, x_t)
-            dW_ih_l0[self.hidden_size : 2 * self.hidden_size] += np.dot(df.T, x_t)
-            dW_ih_l0[2 * self.hidden_size : 3 * self.hidden_size] += np.dot(
-                dc_tilde.T, x_t
-            )
-            dW_ih_l0[3 * self.hidden_size :] += np.dot(do.T, x_t)
+        # Backward pass through time
+        for t in reversed(range(seq_length)):
+            x_t_cache, h, c = self.cache[t]
 
-            dB_ih_l0[: self.hidden_size] += np.sum(di, axis=0)
-            dB_ih_l0[self.hidden_size : 2 * self.hidden_size] += np.sum(df, axis=0)
-            dB_ih_l0[2 * self.hidden_size : 3 * self.hidden_size] += np.sum(
-                dc_tilde, axis=0
-            )
-            dB_ih_l0[3 * self.hidden_size :] += np.sum(do, axis=0)
+            for layer in reversed(range(self.num_layers)):
+                if self.bidirectional:
+                    dh = grad_output[:, t, :self.hidden_size] + dh_next[layer]
+                else:
+                    dh = grad_output[:, t, :] + dh_next[layer]
+                dc = dc_next[layer]
 
-            # Update gradients for the hidden weights
-            dW_hh_l0[: self.hidden_size] += np.dot(di.T, h)
-            dW_hh_l0[self.hidden_size : 2 * self.hidden_size] += np.dot(df.T, h)
-            dW_hh_l0[2 * self.hidden_size : 3 * self.hidden_size] += np.dot(
-                dc_tilde.T, h
-            )
-            dW_hh_l0[3 * self.hidden_size :] += np.dot(do.T, h)
+                h_prev = h[layer - 1] if layer > 0 else np.zeros((batch_size, self.hidden_size))
+                x_t = x_t_cache[layer]
 
-            dB_hh_l0[: self.hidden_size] += np.sum(di, axis=0)
-            dB_hh_l0[self.hidden_size : 2 * self.hidden_size] += np.sum(df, axis=0)
-            dB_hh_l0[2 * self.hidden_size : 3 * self.hidden_size] += np.sum(
-                dc_tilde, axis=0
-            )
-            dB_hh_l0[3 * self.hidden_size :] += np.sum(do, axis=0)
+                # Gradients w.r.t. gate activations
+                W_ih = self._params[f"W_ih_l{layer}"].data
+                W_hh = self._params[f"W_hh_l{layer}"].data
 
-            # Calculate gradient with respect to input x_t
-            dx_t = (
-                np.dot(di, self._params["W_ih_l0"].data[: self.hidden_size, :])
-                + np.dot(
-                    df,
-                    self._params["W_ih_l0"].data[
-                        self.hidden_size : 2 * self.hidden_size, :
-                    ],
-                )
-                + np.dot(
-                    dc_tilde,
-                    self._params["W_ih_l0"].data[
-                        2 * self.hidden_size : 3 * self.hidden_size, :
-                    ],
-                )
-                + np.dot(do, self._params["W_ih_l0"].data[3 * self.hidden_size :, :])
-            )
-            dL_dx[:, t, :] = dx_t
+                gates = np.dot(x_t, W_ih.T) + np.dot(h_prev, W_hh.T) + self._params[f"B_ih_l{layer}"].data + self._params[f"B_hh_l{layer}"].data
 
-            # Propagate gradients to the previous time step
-            dh_next = (
-                np.dot(di, self._params["W_hh_l0"].data[: self.hidden_size, :].T)
-                + np.dot(
-                    df,
-                    self._params["W_hh_l0"]
-                    .data[self.hidden_size : 2 * self.hidden_size, :]
-                    .T,
-                )
-                + np.dot(
-                    dc_tilde,
-                    self._params["W_hh_l0"]
-                    .data[2 * self.hidden_size : 3 * self.hidden_size, :]
-                    .T,
-                )
-                + np.dot(do, self._params["W_hh_l0"].data[3 * self.hidden_size :, :].T)
-            )
+                i_t = self.inp_gate_sigmoid(gates[:, :self.hidden_size])
+                f_t = self.forg_gate_sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
+                g_t = self.cell_gate_tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
+                o_t = self.outp_gate_sigmoid(gates[:, 3*self.hidden_size:])
 
-            dc_next = dc * ft
+                dc = dc * f_t + o_t * (1 - self.cell_gate_tanh(c[layer]) ** 2) * dh
+                di = dc * g_t * i_t * (1 - i_t)
+                df = dc * (c[layer - 1] if layer > 0 else 0) * f_t * (1 - f_t)
+                dg = dc * i_t * (1 - g_t ** 2)
+                do = dh * self.cell_gate_tanh(c[layer]) * o_t * (1 - o_t)
 
-        self._params["W_ih_l0"].grad = dW_ih_l0
-        self._params["B_ih_l0"].grad = dB_ih_l0
-        self._params["W_hh_l0"].grad = dW_hh_l0
-        self._params["B_hh_l0"].grad = dB_hh_l0
+                dgate = np.concatenate((di, df, dg, do), axis=1)
 
-        return dL_dx, dh_next[np.newaxis, :, :], dc_next[np.newaxis, :, :]
+                dW_ih[layer] += np.dot(dgate.T, x_t)
+                dW_hh[layer] += np.dot(dgate.T, h_prev)
+                dB_ih[layer] += np.sum(dgate, axis=0)
+                dB_hh[layer] += np.sum(dgate, axis=0)
 
-    def init_hidden(self, batch_size):
-        # Initialize hidden state and cell state to zeros
-        h0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
-        c0 = np.zeros((self.num_layers, batch_size, self.hidden_size), dtype=np.float32)
-        return h0, c0
+                dh_next[layer] = np.dot(dgate, W_hh)
+                dc_next[layer] = dc * f_t
 
+                if self.bidirectional:
+                    dh_reverse = grad_output[:, seq_length - t - 1, self.hidden_size:] + dh_next_reverse[layer]
+                    dc_reverse = dc_next_reverse[layer]
+
+                    if layer > 0:
+                        h_prev_reverse = h[layer - 1][::-1]
+                    else:
+                        h_prev_reverse = np.zeros((batch_size, self.hidden_size))
+
+                    W_ih_reverse = self._params[f"W_ih_reverse_l{layer}"].data
+                    W_hh_reverse = self._params[f"W_hh_reverse_l{layer}"].data
+
+                    gates_reverse = np.dot(x_t[::-1], W_ih_reverse.T) + np.dot(h_prev_reverse, W_hh_reverse.T) + self._params[f"B_ih_reverse_l{layer}"].data + self._params[f"B_hh_reverse_l{layer}"].data
+
+                    i_t_reverse = self.inp_gate_sigmoid(gates_reverse[:, :self.hidden_size])
+                    f_t_reverse = self.forg_gate_sigmoid(gates_reverse[:, self.hidden_size:2*self.hidden_size])
+                    g_t_reverse = self.cell_gate_tanh(gates_reverse[:, 2*self.hidden_size:3*self.hidden_size])
+                    o_t_reverse = self.outp_gate_sigmoid(gates_reverse[:, 3*self.hidden_size:])
+
+                    dc_reverse = dc_reverse * f_t_reverse + o_t_reverse * (1 - self.cell_gate_tanh(c[layer][::-1]) ** 2) * dh_reverse
+                    di_reverse = dc_reverse * g_t_reverse * i_t_reverse * (1 - i_t_reverse)
+                    df_reverse = dc_reverse * (c[layer - 1][::-1] if layer > 0 else 0) * f_t_reverse * (1 - f_t_reverse)
+                    dg_reverse = dc_reverse * i_t_reverse * (1 - g_t_reverse ** 2)
+                    do_reverse = dh_reverse * self.cell_gate_tanh(c[layer][::-1]) * o_t_reverse * (1 - o_t_reverse)
+
+                    dgate_reverse = np.concatenate((di_reverse, df_reverse, dg_reverse, do_reverse), axis=1)
+
+                    dW_ih_reverse[layer] += np.dot(dgate_reverse.T, x_t[::-1])
+                    dW_hh_reverse[layer] += np.dot(dgate_reverse.T, h_prev_reverse)
+                    dB_ih_reverse[layer] += np.sum(dgate_reverse, axis=0)
+                    dB_hh_reverse[layer] += np.sum(dgate_reverse, axis=0)
+
+                    dh_next_reverse[layer] = np.dot(dgate_reverse, W_hh_reverse)
+                    dc_next_reverse[layer] = dc_reverse * f_t_reverse
+
+                    grad_input[:, seq_length - t - 1, :] += np.dot(dgate_reverse, W_ih_reverse.T)
+
+                grad_input[:, t, :] += np.dot(dgate, W_ih) if layer == 0 else np.dot(dgate, W_ih)[:, :self.hidden_size]
+
+        # Update parameter gradients
+        for layer in range(self.num_layers):
+            self._params[f"W_ih_l{layer}"].grad = dW_ih[layer]
+            self._params[f"W_hh_l{layer}"].grad = dW_hh[layer]
+            self._params[f"B_ih_l{layer}"].grad = dB_ih[layer]
+            self._params[f"B_hh_l{layer}"].grad = dB_hh[layer]
+
+            if self.bidirectional:
+                self._params[f"W_ih_reverse_l{layer}"].grad = dW_ih_reverse[layer]
+                self._params[f"W_hh_reverse_l{layer}"].grad = dW_hh_reverse[layer]
+                self._params[f"B_ih_reverse_l{layer}"].grad = dB_ih_reverse[layer]
+                self._params[f"B_hh_reverse_l{layer}"].grad = dB_hh_reverse[layer]
+
+        return grad_input, dh_next, dc_next
 
 class Embedding(Layer):
     def __init__(self, vocab_size, emb_dim):
