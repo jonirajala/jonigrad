@@ -841,7 +841,6 @@ class BatchNorm(Layer):
         return dL_dx
 
 
-
 class LSTM(Layer):
     def __init__(self, input_size, hidden_size, num_layers=1, bidirectional=False, dropout=0):
         super().__init__()
@@ -853,7 +852,6 @@ class LSTM(Layer):
 
         for layer in range(num_layers):
             input_dim = input_size if layer == 0 else hidden_size * (2 if bidirectional else 1)
-            print(input_dim)
             bound_ih = np.sqrt(1 / input_dim)
             bound_hh = np.sqrt(1 / hidden_size)
             self._params[f"W_ih_l{layer}"] = Parameter(
@@ -882,31 +880,34 @@ class LSTM(Layer):
                     np.zeros((4 * hidden_size), dtype=np.float32)
                 )
 
-        self.inp_gate_sigmoid = Sigmoid()
-        self.forg_gate_sigmoid = Sigmoid()
-        self.cell_gate_tanh = Tanh()
-        self.outp_gate_sigmoid = Sigmoid()
-
-
     def init_hidden(self, batch_size):
         num_directions = 2 if self.bidirectional else 1
         h0 = np.zeros((self.num_layers * num_directions, batch_size, self.hidden_size), dtype=np.float32)
         c0 = np.zeros((self.num_layers * num_directions, batch_size, self.hidden_size), dtype=np.float32)
         return h0, c0
     
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def sigmoid_backward(self, d_output, output):
+        return d_output * output * (1 - output)
+
+    def tanh(self, x):
+        return np.tanh(x)
+
+    def tanh_backward(self, d_output, output):
+        return d_output * (1 - np.square(output))
+    
     def forward_layer(self, x_t, h_prev, c_prev, W_ih, W_hh, B_ih, B_hh):
-        # print(x_t.shape, W_ih.T.shape, B_ih.shape, h_prev.shape, W_hh.shape)
         gates = np.dot(x_t, W_ih.T) + B_ih + np.dot(h_prev, W_hh.T) + B_hh
 
-        # Split gates
-        i_t = self.inp_gate_sigmoid(gates[:, :self.hidden_size])
-        f_t = self.forg_gate_sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
-        g_t = self.cell_gate_tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
-        o_t = self.outp_gate_sigmoid(gates[:, 3*self.hidden_size:])
+        i_t = self.sigmoid(gates[:, :self.hidden_size])
+        f_t = self.sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
+        g_t = self.tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
+        o_t = self.sigmoid(gates[:, 3*self.hidden_size:])
 
-        # Cell state and hidden state updates
         c_new = f_t * c_prev + i_t * g_t
-        h_new = o_t * self.cell_gate_tanh(c_new)
+        h_new = o_t * self.tanh(c_new)
 
         return h_new, c_new
 
@@ -966,11 +967,12 @@ class LSTM(Layer):
 
         outputs = np.stack(outputs, axis=1)
         return outputs, h, c
+    
+
 
     def backward(self, grad_output, dh_next=None, dc_next=None):
         batch_size, seq_length, _ = grad_output.shape
 
-        # Initialize gradients
         dW_ih = {layer: np.zeros_like(self._params[f"W_ih_l{layer}"].data) for layer in range(self.num_layers)}
         dW_hh = {layer: np.zeros_like(self._params[f"W_hh_l{layer}"].data) for layer in range(self.num_layers)}
         dB_ih = {layer: np.zeros_like(self._params[f"B_ih_l{layer}"].data) for layer in range(self.num_layers)}
@@ -982,18 +984,15 @@ class LSTM(Layer):
             dB_ih_reverse = {layer: np.zeros_like(self._params[f"B_ih_reverse_l{layer}"].data) for layer in range(self.num_layers)}
             dB_hh_reverse = {layer: np.zeros_like(self._params[f"B_hh_reverse_l{layer}"].data) for layer in range(self.num_layers)}
 
-        # Initialize gradients for hidden and cell states
-        dh_next = np.zeros((self.num_layers, batch_size, self.hidden_size))
-        dc_next = np.zeros((self.num_layers, batch_size, self.hidden_size))
+        dh_next = np.zeros((self.num_layers, batch_size, self.hidden_size)) if dh_next is None else dh_next
+        dc_next = np.zeros((self.num_layers, batch_size, self.hidden_size)) if dc_next is None else dc_next
 
         if self.bidirectional:
             dh_next_reverse = np.zeros_like(dh_next)
             dc_next_reverse = np.zeros_like(dc_next)
 
-        # Initialize gradient for input
         grad_input = np.zeros((batch_size, seq_length, self.input_size))
 
-        # Backward pass through time
         for t in reversed(range(seq_length)):
             x_t_cache, h, c = self.cache[t]
 
@@ -1007,24 +1006,28 @@ class LSTM(Layer):
                 h_prev = h[layer - 1] if layer > 0 else np.zeros((batch_size, self.hidden_size))
                 x_t = x_t_cache[layer]
 
-                # Gradients w.r.t. gate activations
                 W_ih = self._params[f"W_ih_l{layer}"].data
                 W_hh = self._params[f"W_hh_l{layer}"].data
 
                 gates = np.dot(x_t, W_ih.T) + np.dot(h_prev, W_hh.T) + self._params[f"B_ih_l{layer}"].data + self._params[f"B_hh_l{layer}"].data
 
-                i_t = self.inp_gate_sigmoid(gates[:, :self.hidden_size])
-                f_t = self.forg_gate_sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
-                g_t = self.cell_gate_tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
-                o_t = self.outp_gate_sigmoid(gates[:, 3*self.hidden_size:])
+                i_t = self.sigmoid(gates[:, :self.hidden_size])
+                f_t = self.sigmoid(gates[:, self.hidden_size:2*self.hidden_size])
+                g_t = self.tanh(gates[:, 2*self.hidden_size:3*self.hidden_size])
+                o_t = self.sigmoid(gates[:, 3*self.hidden_size:])
 
-                dc = dc * f_t + o_t * (1 - self.cell_gate_tanh(c[layer]) ** 2) * dh
-                di = dc * g_t * i_t * (1 - i_t)
-                df = dc * (c[layer - 1] if layer > 0 else 0) * f_t * (1 - f_t)
-                dg = dc * i_t * (1 - g_t ** 2)
-                do = dh * self.cell_gate_tanh(c[layer]) * o_t * (1 - o_t)
+                do = dh * np.tanh(c[layer])
+                dc = dc + (dh * o_t * (1 - np.tanh(c[layer]) ** 2))
+                di = dc * g_t
+                df = dc * (c[layer - 1] if layer > 0 else 0)
+                dg = dc * i_t
 
-                dgate = np.concatenate((di, df, dg, do), axis=1)
+                di_input = self.sigmoid_backward(di, i_t)
+                df_input = self.sigmoid_backward(df, f_t)
+                dg_input = self.tanh_backward(dg, g_t)
+                do_input = self.sigmoid_backward(do, o_t)
+
+                dgate = np.concatenate((di_input, df_input, dg_input, do_input), axis=1)
 
                 dW_ih[layer] += np.dot(dgate.T, x_t)
                 dW_hh[layer] += np.dot(dgate.T, h_prev)
@@ -1038,30 +1041,33 @@ class LSTM(Layer):
                     dh_reverse = grad_output[:, seq_length - t - 1, self.hidden_size:] + dh_next_reverse[layer]
                     dc_reverse = dc_next_reverse[layer]
 
-                    if layer > 0:
-                        h_prev_reverse = h[layer - 1][::-1]
-                    else:
-                        h_prev_reverse = np.zeros((batch_size, self.hidden_size))
+                    h_prev_reverse = h[layer - 1][::-1] if layer > 0 else np.zeros((batch_size, self.hidden_size))
+                    x_t_reverse = x_t[::-1]
 
                     W_ih_reverse = self._params[f"W_ih_reverse_l{layer}"].data
                     W_hh_reverse = self._params[f"W_hh_reverse_l{layer}"].data
 
-                    gates_reverse = np.dot(x_t[::-1], W_ih_reverse.T) + np.dot(h_prev_reverse, W_hh_reverse.T) + self._params[f"B_ih_reverse_l{layer}"].data + self._params[f"B_hh_reverse_l{layer}"].data
+                    gates_reverse = np.dot(x_t_reverse, W_ih_reverse.T) + np.dot(h_prev_reverse, W_hh_reverse.T) + self._params[f"B_ih_reverse_l{layer}"].data + self._params[f"B_hh_reverse_l{layer}"].data
 
-                    i_t_reverse = self.inp_gate_sigmoid(gates_reverse[:, :self.hidden_size])
-                    f_t_reverse = self.forg_gate_sigmoid(gates_reverse[:, self.hidden_size:2*self.hidden_size])
-                    g_t_reverse = self.cell_gate_tanh(gates_reverse[:, 2*self.hidden_size:3*self.hidden_size])
-                    o_t_reverse = self.outp_gate_sigmoid(gates_reverse[:, 3*self.hidden_size:])
+                    i_t_reverse = self.sigmoid(gates_reverse[:, :self.hidden_size])
+                    f_t_reverse = self.sigmoid(gates_reverse[:, self.hidden_size:2*self.hidden_size])
+                    g_t_reverse = self.tanh(gates_reverse[:, 2*self.hidden_size:3*self.hidden_size])
+                    o_t_reverse = self.sigmoid(gates_reverse[:, 3*self.hidden_size:])
 
-                    dc_reverse = dc_reverse * f_t_reverse + o_t_reverse * (1 - self.cell_gate_tanh(c[layer][::-1]) ** 2) * dh_reverse
-                    di_reverse = dc_reverse * g_t_reverse * i_t_reverse * (1 - i_t_reverse)
-                    df_reverse = dc_reverse * (c[layer - 1][::-1] if layer > 0 else 0) * f_t_reverse * (1 - f_t_reverse)
-                    dg_reverse = dc_reverse * i_t_reverse * (1 - g_t_reverse ** 2)
-                    do_reverse = dh_reverse * self.cell_gate_tanh(c[layer][::-1]) * o_t_reverse * (1 - o_t_reverse)
+                    do_reverse = dh_reverse * np.tanh(c[layer][::-1])
+                    dc_reverse = dc_reverse + (dh_reverse * o_t_reverse * (1 - np.tanh(c[layer][::-1]) ** 2))
+                    di_reverse = dc_reverse * g_t_reverse
+                    df_reverse = dc_reverse * (c[layer - 1][::-1] if layer > 0 else 0)
+                    dg_reverse = dc_reverse * i_t_reverse
 
-                    dgate_reverse = np.concatenate((di_reverse, df_reverse, dg_reverse, do_reverse), axis=1)
+                    di_input_reverse = self.sigmoid_backward(di_reverse, i_t_reverse)
+                    df_input_reverse = self.sigmoid_backward(df_reverse, f_t_reverse)
+                    dg_input_reverse = self.tanh_backward(dg_reverse, g_t_reverse)
+                    do_input_reverse = self.sigmoid_backward(do_reverse, o_t_reverse)
 
-                    dW_ih_reverse[layer] += np.dot(dgate_reverse.T, x_t[::-1])
+                    dgate_reverse = np.concatenate((di_input_reverse, df_input_reverse, dg_input_reverse, do_input_reverse), axis=1)
+
+                    dW_ih_reverse[layer] += np.dot(dgate_reverse.T, x_t_reverse)
                     dW_hh_reverse[layer] += np.dot(dgate_reverse.T, h_prev_reverse)
                     dB_ih_reverse[layer] += np.sum(dgate_reverse, axis=0)
                     dB_hh_reverse[layer] += np.sum(dgate_reverse, axis=0)
@@ -1071,9 +1077,8 @@ class LSTM(Layer):
 
                     grad_input[:, seq_length - t - 1, :] += np.dot(dgate_reverse, W_ih_reverse.T)
 
-                grad_input[:, t, :] += np.dot(dgate, W_ih) if layer == 0 else np.dot(dgate, W_ih)[:, :self.hidden_size]
+            grad_input[:, t, :] += np.dot(dgate, W_ih)
 
-        # Update parameter gradients
         for layer in range(self.num_layers):
             self._params[f"W_ih_l{layer}"].grad = dW_ih[layer]
             self._params[f"W_hh_l{layer}"].grad = dW_hh[layer]
@@ -1087,7 +1092,82 @@ class LSTM(Layer):
                 self._params[f"B_hh_reverse_l{layer}"].grad = dB_hh_reverse[layer]
 
         return grad_input, dh_next, dc_next
+    
+    def backward_layer(self, d_h_new, d_c_new, x_t, h_prev, c_prev, W_ih, W_hh, i_t, f_t, g_t, o_t, c_new):
+        d_o_t = d_h_new * self.tanh(c_new)
+        d_c_new += d_h_new * o_t * (1 - self.tanh(c_new) ** 2)
 
+        d_f_t = d_c_new * c_prev
+        d_i_t = d_c_new * g_t
+        d_g_t = d_c_new * i_t
+
+        d_i_t = self.sigmoid_backward(d_i_t, i_t)
+        d_f_t = self.sigmoid_backward(d_f_t, f_t)
+        d_g_t = self.tanh_backward(d_g_t, g_t)
+        d_o_t = self.sigmoid_backward(d_o_t, o_t)
+
+        d_gates = np.hstack([d_i_t, d_f_t, d_g_t, d_o_t])
+
+        d_x_t = np.dot(d_gates, W_ih)
+        d_h_prev = np.dot(d_gates, W_hh)
+        d_c_prev = d_c_new * f_t
+
+        
+
+        d_W_ih = np.dot(d_gates.T, x_t)
+        d_W_hh = np.dot(d_gates.T, h_prev)
+        d_B_ih = np.sum(d_gates, axis=0)
+        d_B_hh = np.sum(d_gates, axis=0)
+
+        return d_x_t, d_h_prev, d_c_prev, d_W_ih, d_W_hh, d_B_ih, d_B_hh
+
+
+    
+    def backward(self, d_output):
+        batch_size, seq_length, _ = d_output.shape
+        d_x = np.zeros((batch_size, seq_length, self.input_size), dtype=np.float32)
+        d_h = np.zeros_like(self.cache[0][1])
+        d_c = np.zeros_like(self.cache[0][2])
+
+        for t in reversed(range(seq_length)):
+            x_t_cache, h_cache, c_cache = self.cache[t]
+
+            for layer in reversed(range(self.num_layers)):
+                W_ih = self._params[f"W_ih_l{layer}"].data
+                W_hh = self._params[f"W_hh_l{layer}"].data
+
+                h_prev = h_cache[layer]
+                c_prev = c_cache[layer]
+                i_t = self.sigmoid(np.dot(x_t_cache[layer], W_ih.T) + self._params[f"B_ih_l{layer}"].data + np.dot(h_prev, W_hh.T) + self._params[f"B_hh_l{layer}"].data)[:, :self.hidden_size]
+                f_t = self.sigmoid(np.dot(x_t_cache[layer], W_ih.T) + self._params[f"B_ih_l{layer}"].data + np.dot(h_prev, W_hh.T) + self._params[f"B_hh_l{layer}"].data)[:, self.hidden_size:2*self.hidden_size]
+                g_t = self.tanh(np.dot(x_t_cache[layer], W_ih.T) + self._params[f"B_ih_l{layer}"].data + np.dot(h_prev, W_hh.T) + self._params[f"B_hh_l{layer}"].data)[:, 2*self.hidden_size:3*self.hidden_size]
+                o_t = self.sigmoid(np.dot(x_t_cache[layer], W_ih.T) + self._params[f"B_ih_l{layer}"].data + np.dot(h_prev, W_hh.T) + self._params[f"B_hh_l{layer}"].data)[:, 3*self.hidden_size:]
+                c_new = f_t * c_prev + i_t * g_t
+
+                d_h_new = d_output[:, t, :] + d_h[layer]
+                d_c_new = d_c[layer]
+
+                d_x_t, d_h_prev, d_c_prev, d_W_ih, d_W_hh, d_B_ih, d_B_hh = self.backward_layer(
+                    d_h_new, d_c_new, x_t_cache[layer], h_prev, c_prev,
+                    W_ih, W_hh, i_t, f_t, g_t, o_t, c_new
+                )
+
+                self._params[f"W_ih_l{layer}"].grad += d_W_ih
+                self._params[f"W_hh_l{layer}"].grad += d_W_hh
+                self._params[f"B_ih_l{layer}"].grad += d_B_ih
+                self._params[f"B_hh_l{layer}"].grad += d_B_hh
+
+                d_h[layer] = d_h_prev
+                d_c[layer] = d_c_prev
+
+                if layer == 0:
+                    d_x[:, t, :] = d_x_t
+                else:
+                    d_output[:, t, :] = d_x_t
+
+        return d_x, d_h, d_c
+    
+    
 class Embedding(Layer):
     def __init__(self, vocab_size, emb_dim):
         super().__init__()

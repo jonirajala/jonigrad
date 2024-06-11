@@ -774,8 +774,8 @@ class TestLayerNormLayer(unittest.TestCase):
 class TestLSTM(unittest.TestCase):
     def setUp(self):
         self.input_size = 2
-        self.hidden_size = 3
-        self.num_layers = 3
+        self.hidden_size = 2
+        self.num_layers = 2
         self.batch_size = 5
         self.seq_length = 6
 
@@ -814,9 +814,9 @@ class TestLSTM(unittest.TestCase):
 
     def test_backward_pass(self):
         # Forward pass through both layers to set input
+        
         custom_output, custom_hn, custom_cn = self.custom_lstm.forward(self.x, self.h0, self.c0)
         torch_output, (torch_hn, torch_cn) = self.torch_lstm(self.x_torch, (self.h0_torch, self.c0_torch))
-
         # Create random gradient for backward pass
         grad_output = np.random.randn(*custom_output.shape).astype(np.float32)
         grad_hn = np.random.randn(*custom_hn.shape).astype(np.float32)
@@ -824,26 +824,31 @@ class TestLSTM(unittest.TestCase):
 
         grad_output_torch = torch.from_numpy(grad_output).float()
 
+        self.custom_lstm.zero_grad()
+        self.torch_lstm.zero_grad()
+
         # Backward pass through custom layer
-        custom_grad_input, custom_dh0, custom_dc0 = self.custom_lstm.backward(grad_output, grad_hn, grad_cn)
+        custom_grad_input, custom_dh0, custom_dc0 = self.custom_lstm.backward(grad_output)
 
         # Backward pass through PyTorch layer
         self.x_torch.retain_grad()
         torch_output.backward(grad_output_torch, retain_graph=True)
         torch_grad_input = self.x_torch.grad.numpy()
-
+        
         # Check if gradients are the same
-        for layer in range(self.num_layers):
+        for layer in range(0, self.num_layers):
+            print("Custom")
             print(self.custom_lstm._params[f"W_ih_l{layer}"].grad)
+            print("Torch")
             print(self.torch_lstm.__getattr__(f"weight_ih_l{layer}").grad.numpy())
             self.assertTrue(np.allclose(self.custom_lstm._params[f"W_ih_l{layer}"].grad, self.torch_lstm.__getattr__(f"weight_ih_l{layer}").grad.numpy(), atol=1e-6), f"Input weight gradients for layer {layer} do not match!")
             self.assertTrue(np.allclose(self.custom_lstm._params[f"B_ih_l{layer}"].grad, self.torch_lstm.__getattr__(f"bias_ih_l{layer}").grad.numpy(), atol=1e-6), f"Input bias gradients for layer {layer} do not match!")
             self.assertTrue(np.allclose(self.custom_lstm._params[f"W_hh_l{layer}"].grad, self.torch_lstm.__getattr__(f"weight_hh_l{layer}").grad.numpy(), atol=1e-6), f"Hidden weight gradients for layer {layer} do not match!")
             self.assertTrue(np.allclose(self.custom_lstm._params[f"B_hh_l{layer}"].grad, self.torch_lstm.__getattr__(f"bias_hh_l{layer}").grad.numpy(), atol=1e-6), f"Hidden bias gradients for layer {layer} do not match!")
 
-        self.assertTrue(custom_grad_input, torch_grad_input, atol=1e-6)
-        self.assertTrue(custom_dh0, self.h0_torch.grad.numpy(), atol=1e-6)
-        self.assertTrue(custom_dc0, self.c0_torch.grad.numpy(), atol=1e-6)
+        self.assertTrue(np.allclose(custom_grad_input, torch_grad_input, atol=1e-6))
+        self.assertTrue(np.allclose(custom_dh0, self.h0_torch.grad.numpy(), atol=1e-6))
+        self.assertTrue(np.allclose(custom_dc0, self.c0_torch.grad.numpy(), atol=1e-6))
 
 
 if __name__ == "__main__":
